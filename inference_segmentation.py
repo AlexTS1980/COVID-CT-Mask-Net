@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle
 import utils
-import config
+import config_segmentation as config
 
 
 # main method
@@ -44,7 +44,9 @@ def main(config, step):
     # Alex: these settings could also be added to the config
     maskrcnn_args = {'min_size': 512, 'max_size': 1024, 'box_nms_thresh': 0.75, 'rpn_nms_thresh': 0.75, 'num_classes':None}
     # Alex: for Ground glass opacity and consolidatin segmentation
-    anchor_generator = ckpt['anchor_generator']
+    sizes = ckpt['anchor_generator'].sizes
+    aspect_ratios = ckpt['anchor_generator'].aspect_ratios
+    anchor_generator = AnchorGenerator(sizes, aspect_ratios)
     print("Anchors: ", anchor_generator)
     # num_classes:3 (1+2)
     box_head_input_size = 256 * 7 * 7

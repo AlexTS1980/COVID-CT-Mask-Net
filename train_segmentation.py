@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle
 import utils
-import config
+import config_segmentation as config
 
 
 # main method
@@ -37,28 +37,30 @@ def main(config, main_step):
     if not use_pretrained_model and model is not None:
         print("It seems you want to load the weights")
         use_pretrained_model = True
-        backbone=False
- 
+        backbone=False 
     # 
     if use_pretrained_model:
        model = torch.load(pretrained_model)
-
     # import arguments from the config file
-    model_name, backbone, num_epochs, save_dir, train_data_dir, val_data_dir, imgs_dir, gt_dir, batch_size, device, save_every, lrate = \
-        config.model_name, config.use_pretrained_resnet_backbone, config.num_epochs, config.save_dir, \
+    start_epoch, model_name, backbone, num_epochs, save_dir, train_data_dir, val_data_dir, imgs_dir, gt_dir, batch_size, device, save_every, lrate = \
+        config.start_epoch, config.model_name, config.use_pretrained_resnet_backbone, config.num_epochs, config.save_dir, \
         config.train_data_dir, config.val_data_dir, config.imgs_dir, config.gt_dir, config.batch_size, config.device, config.save_every, config.lrate
+
     if use_pretrained_model:
        backbone=False
+     
     assert device in devices
     if not save_dir in os.listdir('.'):
        os.mkdir(save_dir)
 
     if batch_size > 1:
         print("The model was implemented for batch size of one")
-    if config.device == 'cuda' and torch.cuda.is_available():
+    if device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+
+    print(device)
     torch.manual_seed(time.time())
     ##############################################################################################
     # DATASETS+DATALOADERS
@@ -95,7 +97,9 @@ def main(config, main_step):
            sizes=tuple([(2, 4, 8, 16, 32) for r in range(5)]),
            aspect_ratios=tuple([(0.1, 0.25, 0.5, 1, 1.5, 2) for rh in range(5)]))
     else:
-       anchor_generator = model['anchor_generator'] 
+       sizes = model['anchor_generator'].sizes
+       aspect_ratios = model['anchor_generator'].aspect_ratios
+       anchor_generator = AnchorGenerator(sizes, aspect_ratios)
 
     # num_classes:3 (1+2)
     box_head_input_size = 256 * 7 * 7
@@ -115,6 +119,10 @@ def main(config, main_step):
     # pretrained?
     if use_pretrained_model:
         maskrcnn_model.load_state_dict(model['model_weights'])
+        if model['epoch']:
+           start_epoch = int(model['epoch'])
+        if model['model_name']:
+           model_name = model['model_name']
 
     # Set to training mode
     print(maskrcnn_model)
@@ -122,12 +130,12 @@ def main(config, main_step):
 
     optimizer_pars = {'lr': lrate, 'weight_decay': 1e-3}
     optimizer = torch.optim.Adam(list(maskrcnn_model.parameters()), **optimizer_pars)
-    if use_pretrained_model and 'optimizer_state' in model.keys():
+    if use_pretrained_model and model['optimizer_state']:
        optimizer.load_state_dict(model['optimizer_state'])
 
     start_time = time.time()
 
-    for e in range(num_epochs):
+    for e in range(start_epoch, num_epochs):
         train_loss_epoch = main_step("train", e, dataloader_covid_train, optimizer, device, maskrcnn_model, save_every,
                                 lrate, model_name, None, None)
         eval_loss_epoch = main_step("eval", e, dataloader_covid_eval, optimizer, device, maskrcnn_model, save_every, lrate, model_name, anchor_generator, save_dir)

@@ -1,0 +1,45 @@
+COVID-CT-Mask-Net: Prediction of COVID-19 from CT scans Using Regional Features
+
+1. Segmentation Model
+
+To train and test the model you need Torchvision 0.3.0+
+
+The segmentation model predicts masks of Ground Glass Opacity and Consolidation in CT scans. We trained it on the CNCB CT images with masks (http://ncov-ai.big.ac.cn/download, Experiment data files): 500 training and 150 for testing taken from COVID-positive patients, but some slices have no
+lesions. Use the splits in train_split_segmentation.txt and test_split_segmentation.txt to copy the training data into covid_data/train/imgs and covid_data/train/masks and test data into covid_data/test/imgs and covid_data/test/masks. 
+
+Download the pretrained weights into  pretrained_models/ directory.
+
+To get the inference, run: 
+
+python3.5 inference_segmentation.py --ckpt pretrained_models/segmentation_model.pth --test_data_dir covid_data/test --test_imgs_dir imgs
+
+This should output predictions like these:
+
+To train the model, you also need images with masks. Dataset interface /datasets/dataset_segmentation.py converts masks into binary masks for 2 classes: Ground Glass Opacity and Consolidation. It also extracts labels and bounding boxes that Mask R-CNN requires. 
+To train from scratch, run 
+
+python3.5 train_segmentation.py --device cuda --num_epochs 50 --use_pretrained_model False -use_pretrained_backbone True --save_every 10
+
+2. COVID-CT-Mask-Net (Classifcation Model) 
+
+I reimplemented torchvision's detection library(https://github.com/pytorch/vision/tree/master/torchvision/models/detection) in /models/mask_net/ with the classification module s2_new (S in the paper) and other hacks that convert Mask R-CNN into a classification model.
+First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download), a total of over 100K CT scans. The COVIDx-CT split we used is here: https://github.com/haydengunraj/COVIDNet-CT/blob/master/docs/dataset.md). 
+To extract the COVID, pneumonia and normal scans, follow the instructions in the link to COVIDx-CT. You don't need to do any image preprocessing as inthe COVIDNet-CT model. We used the full validation and test split,
+and a small share of the training data, our sample is in train_split_classification.txt. To evaluate the pretrained model, run
+
+python3.5 inference_classification.py --ckpt pretrained_models/segmentation.pth --test_data_dir covid_data/cncb/test
+
+You should get about 90.80% COVID sensitivity and 90.66% overall accuracy. 
+
+To train the model, copy the images in train_split_classification.txt into a separate folder (e.g. train_small). You need at least the pretrained weights from a segmentation model, such as segmentation_model.pth. You cannot train it from scratch.
+
+python3 train_classifier.py --pretrained_segmentation_model pretrained_models/segmentation_model.pth --num_epochs 50 --save_every 10 --update_type heads_bn --batch_size 8 --device cuda
+
+After 50 epochs you should get the model with the accuracy like the one above. 
+
+3. Models hyperparameters
+
+There are two groups of hyperparameters: training (learning rate, weight regularization, optimizer, etc) and Mask R-CNN hyperparameter (Non-max suppression threshold, RPN and RoI batch size, RPN output, RoI score threshold, etc). The ones in the training scripts 
+are the ones we used to get the models in the paper and the results. For the segmentation model you can use any you want, but for COVID-CT-Mask-Net the RoI score threshold (box_score_thresh) must be negative (e.g. -0.01), because otherwise not all box predictions 
+will be accepted, and the classification module S will not get the batch of the right size, hence you will get a tensor mismatch error.
+

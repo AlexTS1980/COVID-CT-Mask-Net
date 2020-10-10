@@ -2,3 +2,4 @@ torch==1.1.0
 torchvision==0.3.0
 numpy==1.17.4
 matplotlib==3.0.3
+PIL==6.1.0
