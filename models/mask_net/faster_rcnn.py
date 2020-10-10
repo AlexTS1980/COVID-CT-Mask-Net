@@ -290,6 +290,7 @@ class S2Predictor(nn.Module):
           super(S2Predictor,self).__init__()
           self.fc_scores = nn.Linear(in_channels*batch_size, representation_size)
           # add another layer
+          self.fc_scores_2 = nn.Linear(representation_size, representation_size)
           self.fc_scores_img = nn.Linear(representation_size, out_channels)
           for name, param in self.named_parameters():
             if "weight" in name:
@@ -301,6 +302,7 @@ class S2Predictor(nn.Module):
           x = x.view(1,-1)
           # tensor batch_size x 1
           x = F.relu(self.fc_scores(x))
+          x = F.relu(self.fc_scores_2(x))
           x = self.fc_scores_img(x)
           return x
 
