@@ -1,7 +1,7 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 from CT scans Using Regional Features
 
 ## 1. Segmentation Model
-
+![Segmentation Model](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/Images/maskrcnncovidsegment.png)
 To train and test the model you need Torchvision 0.3.0+
 
 The segmentation model predicts masks of Ground Glass Opacity and Consolidation in CT scans. We trained it on the CNCB CT images with masks (http://ncov-ai.big.ac.cn/download, Experiment data files): 500 training and 150 for testing taken from COVID-positive patients, but some slices have no
