@@ -1,7 +1,7 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 from CT scans Using Regional Features
 
 ## 1. Segmentation Model
-![Segmentation Model](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/Images/maskrcnncovidsegment.png)
+![Segmentation Model](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/maskrcnncovidsegment.png)
 To train and test the model you need Torchvision 0.3.0+
 
 The segmentation model predicts masks of Ground Glass Opacity and Consolidation in CT scans. We trained it on the CNCB CT images with masks (http://ncov-ai.big.ac.cn/download, Experiment data files): 500 training and 150 for testing taken from COVID-positive patients, but some slices have no
@@ -14,8 +14,8 @@ To get the inference, run:
 python3.5 inference_segmentation.py --ckpt pretrained_models/segmentation_model.pth --test_data_dir covid_data/test --test_imgs_dir imgs
 ```
 This should output predictions like these:
-![scan1](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/Images/128_92_with_mask.png)
-![scan1](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/Images/133_48_with_mask.png)
+![scan1](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/128_92_with_mask.png)
+![scan1](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/133_48_with_mask.png)
 
 For the explanation of plots see the paper,. To train the model, you also need images with masks. Dataset interface `/datasets/dataset_segmentation.py` converts masks into binary masks for 2 classes: Ground Glass Opacity and Consolidation. It also extracts labels and bounding boxes that Mask R-CNN requires. 
 To train from scratch, run 
