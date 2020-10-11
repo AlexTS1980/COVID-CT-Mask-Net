@@ -17,13 +17,13 @@ This should output predictions like these:
 ![scan1](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/Images/128_92_with_mask.png)
 ![scan1](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/Images/133_48_with_mask.png)
 
-To train the model, you also need images with masks. Dataset interface `/datasets/dataset_segmentation.py` converts masks into binary masks for 2 classes: Ground Glass Opacity and Consolidation. It also extracts labels and bounding boxes that Mask R-CNN requires. 
+For the explanation of plots see the paper,. To train the model, you also need images with masks. Dataset interface `/datasets/dataset_segmentation.py` converts masks into binary masks for 2 classes: Ground Glass Opacity and Consolidation. It also extracts labels and bounding boxes that Mask R-CNN requires. 
 To train from scratch, run 
 
 ```
 python3.5 train_segmentation.py --device cuda --num_epochs 50 --use_pretrained_model False -use_pretrained_backbone True --save_every 10
 ```
-For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about 3 hours on a GPU with 8Gb VRAM).  
+For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about 3 hours on a GPU with 8Gb VRAM). For other arguments see `config_segmentation.py`.  
 
 ## 2. COVID-CT-Mask-Net (Classifcation Model) 
 
@@ -39,7 +39,7 @@ To train the model, copy the images in `train_split_classification.txt` into a s
 ```
 python3 train_classifier.py --pretrained_segmentation_model pretrained_models/segmentation_model.pth --train_data_dir train_small --num_epochs 50 --save_every 10 --update_type heads_bn --batch_size 8 --device cuda
 ```
-After about 40 epochs (6 hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy like the one above. The full confusion matrix of the reported model `classification_model.pth`, rows: True, columns: predicted:
+In this case the wieghts for all parameters except $S$ are copied from the segmentation model, all parameters in $S$ and weights in the batch normalization layers are updated, but the stats in the batch normalization layers (means and variances) are frozen. For other arguments see `config_classifier.py`. After about 40 epochs (6 hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy like the one in 'classification_model.pth'. The full confusion matrix of the reported model (rows: True, columns: predicted):
 
 |  	| Control 	| CP 	| COVID 	|
 |:-:	|:-:	|:-:	|:-:	|
