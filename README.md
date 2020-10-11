@@ -17,8 +17,8 @@ python3.5 inference_segmentation.py --ckpt pretrained_models/segmentation_model.
 ```
 This should output predictions like these:
 <p align="center">
-<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/128_92_with_mask.png" width="600" height="400" align="center"/>
-<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/133_48_with_mask.png" width="600" height="400" align="center"/>
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/128_92_with_mask.png" width="600" height="200" align="center"/>
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/133_48_with_mask.png" width="600" height="200" align="center"/>
 </p>
 
 For the explanation of plots see the paper,. To train the model, you also need images with masks. Dataset interface `/datasets/dataset_segmentation.py` converts masks into binary masks for 2 classes: Ground Glass Opacity and Consolidation. It also extracts labels and bounding boxes that Mask R-CNN requires. 
@@ -30,8 +30,13 @@ python3.5 train_segmentation.py --device cuda --num_epochs 50 --use_pretrained_m
 For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about 3 hours on a GPU with 8Gb VRAM). For other arguments see `config_segmentation.py`.  
 
 ## 2. COVID-CT-Mask-Net (Classifcation Model) 
+
+### The model 
 <p align="center">
-<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid_ct_mask_net.png" width="800" height="400" align="center"/><br/>  
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid_ct_mask_net.png" width="800" height="300" align="center"/><br/>  
+</p>
+### Classification module **SS**
+<p>
 <img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/s_module.png" width="300" height="200" align="center"/>
 </p>
 
@@ -55,9 +60,9 @@ In this case the wieghts for all parameters except **S** are copied from the seg
 | **CP** 	| 406 	| 6767 	| 213 	|
 | **COVID** 	| 14 	| 386 	| 3946 	|
 
-## 3. Models hyperparameters
+## 3. Models' hyperparameters
 
-There are two groups of hyperparameters: training (learning rate, weight regularization, optimizer, etc) and Mask R-CNN hyperparameter (Non-max suppression threshold, RPN and RoI batch size, RPN output, RoI score threshold, etc). The ones in the training scripts 
+There are two groups of hyperparameters: training (learning rate, weight regularization, optimizer, etc) and Mask R-CNN hyperparameters (Non-max suppression threshold, RPN and RoI batch size, RPN output, RoI score threshold, etc). The ones in the training scripts 
 are the ones we used to get the models in the paper and the results. For the segmentation model you can use any you want, but for COVID-CT-Mask-Net the RoI score threshold (`box_score_thresh`) must be negative (e.g. `-0.01`), because otherwise not all box predictions 
 will be accepted, and the classification module **S** will not get the batch of the right size, hence you will get a tensor mismatch error.
 
