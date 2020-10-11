@@ -47,7 +47,7 @@ First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download)
 ```
 python3.5 evaluate_classifier.py --ckpt pretrained_models/segmentation.pth --test_data_dir covid_data/cncb/test
 ```
-You should get about **90.80%** COVID sensitivity and **90.66%** overall accuracy. 
+You should get about **90.80%** COVID sensitivity and **91.66%** overall accuracy. 
 
 To train the model, copy the images in `train_split_classification.txt` into a separate folder (e.g. `train_small`). You need at least the pretrained weights from a segmentation model, such as `segmentation_model.pth`. You cannot train it from scratch.
 ```
