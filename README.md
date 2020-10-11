@@ -29,7 +29,7 @@ python3.5 train_segmentation.py --device cuda --num_epochs 50 --use_pretrained_m
 ```
 For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about 3 hours on a GPU with 8Gb VRAM). For other arguments see `config_segmentation.py`.  
 
-## 2. COVID-CT-Mask-Net (Classifcation Model) 
+## 2. COVID-CT-Mask-Net (Classification Model) 
 
 **The model**
 <p align="center">
@@ -47,7 +47,7 @@ First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download)
 ```
 python3.5 evaluate_classifier.py --ckpt pretrained_models/segmentation.pth --test_data_dir covid_data/cncb/test
 ```
-You should get about **90.80%** COVID sensitivity and **90.66%** overall accuracy. 
+You should get about **90.80%** COVID sensitivity and **91.66%** overall accuracy. 
 
 To train the model, copy the images in `train_split_classification.txt` into a separate folder (e.g. `train_small`). You need at least the pretrained weights from a segmentation model, such as `segmentation_model.pth`. You cannot train it from scratch.
 ```
