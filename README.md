@@ -36,7 +36,7 @@ For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about
 <img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid_ct_mask_net.png" width="800" height="300" align="center"/><br/>  
 </p>
 ### Classification module **SS**
-<p>
+<p align="center">
 <img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/s_module.png" width="300" height="200" align="center"/>
 </p>
 
