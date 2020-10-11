@@ -23,14 +23,15 @@ To train from scratch, run
 ```
 python3.5 train_segmentation.py --device cuda --num_epochs 50 --use_pretrained_model False -use_pretrained_backbone True --save_every 10
 ```
+For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about 3 hours on a GPU with 8Gb VRAM).  
 
 ## 2. COVID-CT-Mask-Net (Classifcation Model) 
 
 I reimplemented torchvision's detection library(https://github.com/pytorch/vision/tree/master/torchvision/models/detection) in `/models/mask_net/` with the classification module **s2_new** (**S** in the paper) and other hacks that convert Mask R-CNN into a classification model.
-First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download), a total of over 100K CT scans. The COVIDx-CT split we used is here: https://github.com/haydengunraj/COVIDNet-CT/blob/master/docs/dataset.md). To extract the COVID, pneumonia and normal scans, follow the instructions in the link to COVIDx-CT. You don't need to do any image preprocessing as inthe COVIDNet-CT model. We used the full validation and test split, and a small share of the training data, our sample is in `train_split_classification.txt`. To evaluate the pretrained model, run
+First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download), a total of over 100K CT scans. The COVIDx-CT split we used is here: https://github.com/haydengunraj/COVIDNet-CT/blob/master/docs/dataset.md). To extract the COVID, pneumonia and normal scans, follow the instructions in the link to COVIDx-CT. You don't need to do any image preprocessing as inthe COVIDNet-CT model. We used the full validation and test split, and a small share of the training data, our sample is in `train_split_classification.txt`. To follow the convention used in the other two datsets, we set Class 0: Control, Class 1: Normal Pneumonia, Class 2: COVID. Thus the dataset interface `datasets/dataset_classification.py` extracts the labels from the file names. To evaluate the pretrained model, run
 
 ```
-python3.5 inference_classification.py --ckpt pretrained_models/segmentation.pth --test_data_dir covid_data/cncb/test
+python3.5 evaluate_classifier.py --ckpt pretrained_models/segmentation.pth --test_data_dir covid_data/cncb/test
 ```
 You should get about **90.80%** COVID sensitivity and **90.66%** overall accuracy. 
 
@@ -38,7 +39,13 @@ To train the model, copy the images in `train_split_classification.txt` into a s
 ```
 python3 train_classifier.py --pretrained_segmentation_model pretrained_models/segmentation_model.pth --train_data_dir train_small --num_epochs 50 --save_every 10 --update_type heads_bn --batch_size 8 --device cuda
 ```
-After 50 epochs you should get the model with the accuracy like the one above. 
+After about 40 epochs (6 hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy like the one above. The full confusion matrix of the reported model `classification_model.pth`, rows: True, columns: predicted:
+
+|  	| Control 	| CP 	| COVID 	|
+|:-:	|:-:	|:-:	|:-:	|
+| **Control** 	| 8703 	| 738 	| 9 	|
+| **CP** 	| 406 	| 6767 	| 213 	|
+| **COVID** 	| 14 	| 386 	| 3946 	|
 
 ## 3. Models hyperparameters
 
