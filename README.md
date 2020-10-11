@@ -1,4 +1,4 @@
-# COVID-CT-Mask-Net: Prediction of COVID-19 from CT scans Using Regional Features
+# COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
 ## 1. Segmentation Model
 <p align="center">
