@@ -29,7 +29,7 @@ python3.5 train_segmentation.py --device cuda --num_epochs 50 --use_pretrained_m
 ```
 For the COVID-CT-Mask-Net classsifier, we trained the model for 50 epochs (about 3 hours on a GPU with 8Gb VRAM). For other arguments see `config_segmentation.py`.  
 
-## 2. COVID-CT-Mask-Net (Classifcation Model) 
+## 2. COVID-CT-Mask-Net (Classification Model) 
 
 **The model**
 <p align="center">
