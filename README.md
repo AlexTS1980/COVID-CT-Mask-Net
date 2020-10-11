@@ -39,7 +39,7 @@ To train the model, copy the images in `train_split_classification.txt` into a s
 ```
 python3 train_classifier.py --pretrained_segmentation_model pretrained_models/segmentation_model.pth --train_data_dir train_small --num_epochs 50 --save_every 10 --update_type heads_bn --batch_size 8 --device cuda
 ```
-In this case the wieghts for all parameters except $S$ are copied from the segmentation model, all parameters in $S$ and weights in the batch normalization layers are updated, but the stats in the batch normalization layers (means and variances) are frozen. For other arguments see `config_classifier.py`. After about 40 epochs (6 hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy like the one in 'classification_model.pth'. The full confusion matrix of the reported model (rows: True, columns: predicted):
+In this case the wieghts for all parameters except **S** are copied from the segmentation model, all parameters in **S** and weights in the batch normalization layers are updated, but the stats in the batch normalization layers (means and variances) are frozen. For other arguments see `config_classifier.py`. After about 40 epochs (6 hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy like the one in 'classification_model.pth'. The full confusion matrix of the reported model (rows: True, columns: predicted):
 
 |  	| Control 	| CP 	| COVID 	|
 |:-:	|:-:	|:-:	|:-:	|
