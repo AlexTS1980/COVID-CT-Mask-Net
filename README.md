@@ -1,5 +1,19 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
+The paper on medrXiv: [COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features](https://www.medrxiv.org/content/10.1101/2020.10.11.20211052v1.full.pdf)
+
+Bibtex citation ref: 
+
+```
+@article {Ter-Sarkisov2020.10.11.20211052,
+	author = {Ter-Sarkisov, Aram},
+	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
+	year = {2020},
+	doi = {10.1101/2020.10.11.20211052},
+	publisher = {Cold Spring Harbor Laboratory Press},
+	journal = {medRxiv}
+}
+```
 ## 1. Segmentation Model
 <p align="center">
 <img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/maskrcnncovidsegment.png" width="800" height="250" align="center"/>
@@ -67,3 +81,4 @@ There are two groups of hyperparameters: training (learning rate, weight regular
 are the ones we used to get the models in the paper and the results. For the segmentation model you can use any you want, but for COVID-CT-Mask-Net the RoI score threshold (`box_score_thresh`) must be negative (e.g. `-0.01`), because otherwise not all box predictions 
 will be accepted, and the classification module **S** will not get the batch of the right size, hence you will get a tensor mismatch error.
 
+For any questions, contact Alex Ter-Sarkisov: (alex.ter-sarkisov@city.ac.uk)
