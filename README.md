@@ -1,6 +1,6 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
-The paper on medrXiv: [COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features](https://www.medrxiv.org/content/10.1101/2020.10.11.20211052v1.full.pdf)
+The paper on medrXiv: [COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features](https://www.medrxiv.org/content/10.1101/2020.10.11.20211052v2.full.pdf)
 
 Bibtex citation ref: 
 
