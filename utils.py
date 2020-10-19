@@ -31,11 +31,10 @@ def str_to_bool(s):
     return s.lower() in ('true')
 
 
-########################   AVERAGE PRECISION COMPUTATION ########################
-# adapted from Matterport Mask R-CNN implementation                             #
-# https://github.com/matterport/Mask_RCNN                                       #
-# inputs are predicted masks>threshold (0.5)                                    #
-#################################################################################
+# AVERAGE PRECISION COMPUTATION
+# adapted from Matterport Mask R-CNN implementation                             
+# https://github.com/matterport/Mask_RCNN                                       
+# inputs are predicted masks>threshold (0.5)                                    
 def compute_overlaps_masks(masks1, masks2):
     # masks1: (HxWxnum_pred)
     # masks2: (HxWxnum_gts)
