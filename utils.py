@@ -4,8 +4,8 @@ import torch.nn
 
 # The Classification module must have the word 'new' in it
 # set all trainable modules to training mode
-# To replicate the best model from the paper, 
-# the update mode must be heads_bn, but BatchNorm2d 
+# To replicate the best model from the paper,
+# the update mode must be heads_bn, but BatchNorm2d
 # layers must be in evaluation mode
 # The weights will be updated, but means/variances frozen
 def set_to_train_mode(model, update_mode):
@@ -32,9 +32,9 @@ def str_to_bool(s):
 
 
 # AVERAGE PRECISION COMPUTATION
-# adapted from Matterport Mask R-CNN implementation                             
-# https://github.com/matterport/Mask_RCNN                                       
-# inputs are predicted masks>threshold (0.5)                                    
+# adapted from Matterport Mask R-CNN implementation
+# https://github.com/matterport/Mask_RCNN
+# inputs are predicted masks>threshold (0.5)
 def compute_overlaps_masks(masks1, masks2):
     # masks1: (HxWxnum_pred)
     # masks2: (HxWxnum_gts)
