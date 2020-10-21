@@ -14,7 +14,7 @@ Bibtex citation ref:
 	journal = {medRxiv}
 }
 ```
-## Update 19/10/20
+## Update 19/10/20-21/10/20
 
 I added methods in the `utils` script to compute the accuracy (mean Average Precision) of Mask R-CNN segmentation models. They are based on matterport's package, but purely in pytorch, no requirements for RLE or pycocotools. A new evaluation script, `evaluation_mean_ap`, which uses these methods for a range of Intersect over Union (IoU) thresholds, has been added too. For the validation split in `test_split_segmentation.txt` I get the following results: 
 |  	| AP@0.5 	| AP@0.75 	| mAP@[0.5:0.95:0.05] 	|
