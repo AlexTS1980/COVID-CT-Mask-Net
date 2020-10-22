@@ -357,7 +357,6 @@ class RoIHeads(torch.nn.Module):
         all_roi_inds = []
         for boxes, res_box, scores, image_shape in zip(pred_boxes, res_boxes, pred_scores, image_shapes):
             boxes = box_ops.clip_boxes_to_image(boxes, image_shape)
-
             # create labels for each prediction
             labels = torch.arange(num_classes, device=device)
             labels = labels.view(1, -1).expand_as(scores)
@@ -388,6 +387,18 @@ class RoIHeads(torch.nn.Module):
             keep = box_ops.batched_nms(boxes, scores, labels, self.nms_thresh)
             # keep only topk scoring predictions
             keep = keep[:self.detections_per_img]
+            # Alex: keep is a vector, keep.ndimension()==1
+            # if fewer than the RoI batch size, augment and keep the order!
+            if keep.size().numel()<self.detections_per_img:
+               keep_aug = torch.zeros(self.detections_per_img, dtype=torch.long)
+               # get the indices to fill in with the values from the keep vector, make sure 0 is the first value, and add the last index=RoI batch size
+               inds_rand = torch.cat((torch.tensor([0]), torch.randperm(self.detections_per_img-2)[:keep.size().numel()-1].sort().values+1, torch.tensor([self.detections_per_img])),0).unique()
+               for idxs, posts in enumerate(inds_rand[:-1]):
+                   #print(idxs, posts, keep[idxs])
+                   keep_aug[posts:inds_rand[idxs+1]] = keep[idxs].expand(inds_rand[idxs+1]-posts)
+               #print('kk', keep_aug, keep)
+               keep=keep_aug
+
             # 6. Do the same with the uncencoded boxes
             boxes, scores, labels, res_box, roi_inds = boxes[keep], scores[keep], labels[keep], res_box[keep], roi_inds[keep]
             all_boxes.append(boxes)

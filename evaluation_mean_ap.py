@@ -41,19 +41,19 @@ def main(config, step):
 
     if model_name is None:
         model_name = "maskrcnn_segmentation"
-    if config.model_name is not None and config.model_name != model_name:
+    elif model_name is not None and config.model_name != model_name:
         print("Using model name from the config.")
         model_name = config.model_name
 
     # either 2+1 or 1+1 classes
     assert mask_type in mask_classes
     if mask_type == "both":
-        num_classes = 3
+        n_c = 3
     else:
-        num_classes = 2
+        n_c = 2
     # dataset interface
     dataset_covid_eval_pars = {'stage': 'eval', 'gt': os.path.join(data_dir, gt_dir),
-                               'data': os.path.join(data_dir, ims_dir), 'mask_type': mask_type}
+                               'data': os.path.join(data_dir, ims_dir), 'mask_type': mask_type, 'ignore_small':True}
     datapoint_eval_covid = dataset.CovidCTData(**dataset_covid_eval_pars)
     dataloader_covid_eval_pars = {'shuffle': False, 'batch_size': 1}
     dataloader_eval_covid = data.DataLoader(datapoint_eval_covid, **dataloader_covid_eval_pars)
@@ -68,9 +68,9 @@ def main(config, step):
 
     # create modules
     box_head = TwoMLPHead(in_channels=7 * 7 * 256, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=num_classes)
+    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
     mask_roi_pool = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0, 1, 2, 3], output_size=14, sampling_ratio=2)
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=num_classes)
+    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
     # keyword arguments
     maskrcnn_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': 128,
                      'box_nms_thresh': roi_nms, 'box_score_thresh': confidence_threshold, 'rpn_nms_thresh': rpn_nms,

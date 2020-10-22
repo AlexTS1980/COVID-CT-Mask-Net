@@ -2,16 +2,19 @@ import torch
 import torch.nn
 
 # set all modules to training mode
-def set_to_train_mode(model,report=True):
+def set_to_train_mode(model, report=True):
     for _k in model._modules.keys():
         if 'new' in _k:
            if report:
               print("Setting {0:} to training mode".format(_k))
            model._modules[_k].train(True)
 
-# copy weights to existing layers, switch on gradients for other layers
-# This doesn't apply to running_var, running_mean and batch tracking
-# This assumes that trainable layers has the 'new' in their name
+# switch on gradients and add parameters to the list of trainable parameters
+# implemented only for update_type=new_bn (classification module S + all batch
+# normalization layers in the model
+# This doesn't apply to running_var, running_mean and batch tracking (frozen)
+# in batch normalization layers
+# This assumes that trainable layers have either 'new' or 'bn' in their name
 def switch_model_on(model, ckpt, list_trained_pars):
     param_names = ckpt['model_weights'].keys()
     for _n,_p in model.named_parameters():
@@ -27,6 +30,7 @@ def switch_model_on(model, ckpt, list_trained_pars):
          _p.requires_grad_(True)
          list_trained_pars.append(_p)
          print(_n, "new pars, trainable")
+
 # AVERAGE PRECISION COMPUTATION
 # adapted from Matterport Mask R-CNN implementation
 # https://github.com/matterport/Mask_RCNN
@@ -123,3 +127,9 @@ def compute_ap(gt_boxes, gt_class_ids, gt_masks,
     map = torch.sum((recalls[indices] - recalls[indices - 1]) *
                  precisions[indices])
     return map, precisions, recalls, overlaps
+
+
+# easier boolean argument
+def str_to_bool(v):
+    return v.lower() in ('true')
+

@@ -26,19 +26,29 @@ def main(config, step):
     torch.manual_seed(time.time())
     start_time = time.time()
     devices = ['cpu', 'cuda']
-    pretrained_model, model_name, test_data_dir, device = config.ckpt, config.model_name, config.test_data_dir, config.device
-    assert device in devices
+    mask_classes = ['both', 'ggo', 'merge']
+    assert config.device in devices
+    assert config.mask_type in mask_classes
+
+    pretrained_model, model_name, test_data_dir, device, mask_type, rpn_nms, roi_nms \
+              = config.ckpt, config.model_name, config.test_data_dir, config.device, config.mask_type, \
+                config.rpn_nms_th, config.roi_nms_th
 
     if torch.cuda.is_available() and device == 'cuda':
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-
+    # either 2+1 or 1+1 classes
+    assert mask_type in mask_classes
+    if mask_type == "both":
+        n_c = 3
+    else:
+        n_c = 2
     ckpt = torch.load(pretrained_model, map_location=device)
     # 'box_detections_per_img': batch size input in module S
     # 'box_score_thresh': negative to accept all predictions
     covid_mask_net_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': 256,
-                           'box_nms_thresh': 0.75, 'box_score_thresh': -0.01, 'rpn_nms_thresh': 0.75}
+                           'box_nms_thresh': roi_nms, 'box_score_thresh': -0.01, 'rpn_nms_thresh': rpn_nms}
     print(covid_mask_net_args)
     # extract anchor generator from the checkpoint
     sizes = ckpt['anchor_generator'].sizes
@@ -46,9 +56,9 @@ def main(config, step):
     anchor_generator = AnchorGenerator(sizes, aspect_ratios)
     box_head_input_size = 256 * 7 * 7
     box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=3)
+    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
     # Mask prediction is not necessary, keep it for future extensions
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=3)
+    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
 
     covid_mask_net_args['rpn_anchor_generator'] = anchor_generator
     covid_mask_net_args['mask_predictor'] = mask_predictor

@@ -15,6 +15,13 @@ from skimage.measure import regionprops
 class CovidCTData(data.Dataset):
 
     def __init__(self, **kwargs):
+        self.mask_type = kwargs['mask_type']
+        self.ignore_ = kwargs['ignore_small']
+        # ignore small areas?
+        if self.ignore_:
+           self.area_th = 100
+        else:
+           self.area_th = 1
         self.stage = kwargs['stage']
         # this returns the path to imgs dir
         self.data = kwargs['data']
@@ -62,17 +69,25 @@ class CovidCTData(data.Dataset):
         self.fname = os.path.join(self.gt, self.sorted_gt[idx])
         # extract bboxes from the mask
         mask = np.array(PILImage.open(self.fname))
+        # only GGO: merge C and background
+        # or merge GGO and C into a single mask
+        # or keep separate masks
+        if self.mask_type == "ggo":
+           mask[mask==3] = 0
+        elif self.mask_type == "merge":
+           mask[mask==3] = 2
         # array  (NUM_CLASS_IN_IMNG, H,W) without bgr+lungs class (merge Class 0 and 1)
         # THIS IS IMPORTANT! CAN TRIGGER CUDA ERROR
         mask_classes = mask == np.unique(mask)[:, None, None][2:]
         # print(mask_classes)
         # extract bounding boxes and masks for each object
         for _idx, m in enumerate(mask_classes):
+            print('id', _idx)
             lab_mask = method_label(m)
             regions = regionprops(lab_mask)
             for _i, r in enumerate(regions):
                 # get rid of really small ones:
-                if r.area > 1:
+                if r.area > self.area_th:
                     box_coords = (r.bbox[1], r.bbox[0], r.bbox[3], r.bbox[2])
                     list_of_bboxes.append(box_coords)
                     labels.append(_idx + 1)

@@ -33,37 +33,44 @@ def main(config, main_step):
     torch.manual_seed(time.time())
     start_time = time.time()
     devices = ['cpu', 'cuda']
-    updates = ['heads', 'heads_bn', 'full']
-    start_epoch, update_type, pretrained_classifier, pretrained_segmenter, model_name, num_epochs, save_dir, train_data_dir, val_data_dir, \
-    batch_size, device, save_every, lrate = config.start_epoch, config.update_type, config.pretrained_classification_model, \
+    mask_classes = ['both', 'ggo', 'merge']
+    assert config.mask_type in mask_classes
+
+    start_epoch, pretrained_classifier, pretrained_segment, model_name, num_epochs, save_dir, train_data_dir, val_data_dir, \
+    batch_size, device, save_every, lrate, rpn_nms, roi_nms, mask_type = config.start_epoch, config.pretrained_classification_model, \
                                             config.pretrained_segmentation_model, \
                                             config.model_name, config.num_epochs, config.save_dir, \
                                             config.train_data_dir, config.val_data_dir, \
-                                            config.batch_size, config.device, config.save_every, config.lrate
+                                            config.batch_size, config.device, config.save_every, config.lrate, config.rpn_nms_th, config.roi_nms_th, config.mask_type
 
-    if pretrained_classifier is not None and pretrained_segmenter is not None:
+    if pretrained_classifier is not None and pretrained_segment is not None:
         print("Not clear which model to use, switching to the classifier")
         pretrained_model = pretrained_classifier
-    elif pretrained_classifier is not None and pretrained_segmenter is None:
+    elif pretrained_classifier is not None and pretrained_segment is None:
         pretrained_model = pretrained_classifier
     else:
-        pretrained_model = pretrained_segmenter
+        pretrained_model = pretrained_segment
 
     assert device in devices
-    assert update_type in updates
     if device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+
+    # which type of mask?
+    if mask_type == "both":
+        n_c = 3
+    else:
+        n_c = 2
     ##############################################################################################
     # DATASETS+DATALOADERS
     # Alex: could be added in the config file in the future
     # parameters for the dataset
     # 512x512 is the recommended image size input
-    dataset_covid_pars_train_cl = {'stage': 'train', 'data': train_data_dir, 'img_size': 512}
+    dataset_covid_pars_train_cl = {'stage': 'train', 'data': train_data_dir, 'img_size': (512,512)}
     datapoint_covid_train_cl = dataset.COVID_CT_DATA(**dataset_covid_pars_train_cl)
     #
-    dataset_covid_pars_eval_cl = {'stage': 'eval', 'data': val_data_dir, 'img_size': 512}
+    dataset_covid_pars_eval_cl = {'stage': 'eval', 'data': val_data_dir, 'img_size': (512,512)}
     datapoint_covid_eval_cl = dataset.COVID_CT_DATA(**dataset_covid_pars_eval_cl)
     #
     dataloader_covid_pars_train_cl = {'shuffle': True, 'batch_size': batch_size}
@@ -82,7 +89,7 @@ def main(config, main_step):
     # Box detections/image: batch size for the classifier
     #
     covid_mask_net_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': 256,
-                           'box_nms_thresh': 0.75, 'box_score_thresh': -0.01, 'rpn_nms_thresh': 0.75}
+                           'box_nms_thresh': roi_nms, 'box_score_thresh': -0.01, 'rpn_nms_thresh': rpn_nms}
 
     # copy the anchor generator parameters, create a new one to avoid implementations' clash
     sizes = ckpt['anchor_generator'].sizes
@@ -92,9 +99,9 @@ def main(config, main_step):
     # num_classes:3 (1+2)
     box_head_input_size = 256 * 7 * 7
     box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=3)
+    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
     # Mask prediction is not necessary, keep it for future extensions
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=3)
+    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
 
     covid_mask_net_args['rpn_anchor_generator'] = anchor_generator
     covid_mask_net_args['mask_predictor'] = mask_predictor
@@ -106,24 +113,25 @@ def main(config, main_step):
 
     # which parameters to train?
     trained_pars = []
-
+    # if the weights are loaded from the segmentation model:
     if pretrained_classifier is None:
         for _n, _par in covid_mask_net_model.state_dict().items():
             if _n in ckpt['model_weights']:
                 print('Loading parameter', _n)
                 _par.copy_(ckpt['model_weights'][_n])
+    # if the weights are loaded from the classification model
     else:
         covid_mask_net_model.load_state_dict(ckpt['model_weights'])
-        if ckpt['epoch']:
+        if 'epoch' in ckpt.keys():
             start_epoch = int(ckpt['epoch'])
-        if ckpt['model_name']:
-            model_name = ckpt['model_name']
+        if 'model_name' in ckpt.keys():
+            model_name = str(ckpt['model_name'])
 
     # Evaluation mode, no labels!
     covid_mask_net_model.eval()
     # set the model to training mode without triggering the 'training' mode of Mask R-CNN
-    utils.switch_model_on(covid_mask_net_model, trained_pars, update_type)
-    utils.set_to_train_mode(covid_mask_net_model, update_type)
+    utils.switch_model_on(covid_mask_net_model, ckpt, trained_pars)
+    utils.set_to_train_mode(covid_mask_net_model)
     print(covid_mask_net_model)
     covid_mask_net_model = covid_mask_net_model.to(device)
 
@@ -134,19 +142,21 @@ def main(config, main_step):
     optimizer = torch.optim.Adam(trained_pars, **optimizer_pars)
     if pretrained_classifier is not None and 'optimizer_state' in ckpt.keys():
         optimizer.load_state_dict(ckpt['optimizer_state'])
-
+    if start_epoch>0:
+       num_epochs += start_epoch
+    print("Start training, epoch = {:d}".format(start_epoch))
     for e in range(start_epoch, num_epochs):
         train_loss_epoch = main_step("train", e, dataloader_covid_train_cl, optimizer, device, covid_mask_net_model,
-                                     save_every, lrate, model_name, None, None, update_type=update_type)
+                                     save_every, lrate, model_name, None, None)
         eval_loss_epoch = main_step("eval", e, dataloader_covid_eval_cl, optimizer, device, covid_mask_net_model,
-                                    save_every, lrate, model_name, anchor_generator, save_dir, update_type=update_type)
+                                    save_every, lrate, model_name, anchor_generator, save_dir)
         print(
             "Epoch {0:d}: train loss = {1:.3f}, validation loss = {2:.3f}".format(e, train_loss_epoch, eval_loss_epoch))
     end_time = time.time()
     print("Training took {0:.1f} seconds".format(end_time - start_time))
 
 
-def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, model_name, anchors, save_dir, update_type):
+def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, model_name, anchors, save_dir):
     epoch_loss = 0
     for id, b in enumerate(dataloader):
         optimizer.zero_grad()
@@ -182,7 +192,7 @@ def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, mode
             torch.save(state, os.path.join(save_dir, "covid_ct_mask_net" + str(e) + ".pth"))
         else:
             torch.save(state, os.path.join(save_dir, model_name + "_ckpt_" + str(e) + ".pth"))
-        utils.set_to_train_mode(model, update_type)
+        utils.set_to_train_mode(model)
     return epoch_loss
 
 

@@ -29,20 +29,32 @@ import config_segmentation as config
 # main method
 def main(config, step):
     devices = ['cpu', 'cuda']
-    ct_classes = {0: '__bgr', 1: 'GGO', 2: 'CL'}
-    ct_colors = {1: 'red', 2: 'blue', 'mask_cols': np.array([[255, 0, 0], [0, 0, 255]])}
-    
+    mask_classes = ['both', 'ggo', 'merge']
+    assert config.mask_type in mask_classes
     assert config.device in devices
     if config.device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
     #
+    # get the configuration
+    confidence_threshold, mask_threshold, save_dir, data_dir, imgs_dir, mask_type, rpn_nms, roi_nms  = \
+        config.confidence_th, config.mask_logits_th, config.save_dir, config.test_data_dir, config.test_imgs_dir, \
+        config.mask_type, config.rpn_nms_th, config.roi_nms_th
+
+    if mask_type == "both":
+        n_c = 3
+    else:
+        n_c = 2
     ckpt = torch.load(config.ckpt, map_location=device)
+
+    model_name = None
+    if 'model_name' in ckpt.keys():
+        model_name = ckpt['model_name']
     ###############################################################################################
     # MASK R-CNN model
     # Alex: these settings could also be added to the config
-    maskrcnn_args = {'min_size': 512, 'max_size': 1024, 'box_nms_thresh': 0.75, 'rpn_nms_thresh': 0.75, 'num_classes':None}
+    maskrcnn_args = {'min_size': 512, 'max_size': 1024, 'box_nms_thresh': roi_nms, 'rpn_nms_thresh': rpn_nms, 'num_classes':None}
     # Alex: for Ground glass opacity and consolidatin segmentation
     sizes = ckpt['anchor_generator'].sizes
     aspect_ratios = ckpt['anchor_generator'].aspect_ratios
@@ -51,9 +63,9 @@ def main(config, step):
     # num_classes:3 (1+2)
     box_head_input_size = 256 * 7 * 7
     box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=3)
+    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
     mask_roi_pool = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0, 1, 2, 3], output_size=14, sampling_ratio=2)
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=3)
+    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
 
     maskrcnn_args['rpn_anchor_generator'] = anchor_generator
     maskrcnn_args['mask_roi_pool'] = mask_roi_pool
@@ -70,15 +82,27 @@ def main(config, step):
     maskrcnn_model.eval().to(device)
 
     start_time = time.time()
-    # get the thresholds
-    confidence_threshold, mask_threshold, save_dir, data_dir, imgs_dir, model_name = \
-        config.confidence_th, config.mask_logits_th, config.save_dir, config.test_data_dir, config.test_imgs_dir, \
-        ckpt['model_name']
- 
+    # get the correct masks and mask colors
+    if mask_type == "ggo":
+       ct_classes = {0: '__bgr', 1: 'GGO'}
+       ct_colors = {1: 'red', 'mask_cols': np.array([[255, 0, 0]])}
+    elif mask_type == "merge":
+       ct_classes = {0: '__bgr', 1: 'Lesion'}
+       ct_colors = {1: 'red', 'mask_cols': np.array([[255, 0, 0]])}
+    elif mask_type == "both":
+       ct_classes = {0: '__bgr', 1: 'GGO', 2: 'CL'}
+       ct_colors = {1: 'red', 2: 'blue', 'mask_cols': np.array([[255, 0, 0], [0, 0, 255]])} 
+
     if not save_dir in os.listdir('.'):
        os.mkdir(save_dir)
+
+    # model name from config, not checkpoint
     if model_name is None:
-       model_name = "maskrcnn_segmentation"
+        model_name = "maskrcnn_segmentation"
+    elif model_name is not None and config.model_name != model_name:
+        print("Using model name from the config.")
+        model_name = config.model_name
+
     # run the inference with provided hyperparameters
     test_ims = os.listdir(os.path.join(data_dir, imgs_dir))
     for j, ims in enumerate(test_ims):

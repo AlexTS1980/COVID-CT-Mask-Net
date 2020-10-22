@@ -27,28 +27,30 @@ import config_segmentation as config
 # main method
 def main(config, main_step):
     devices = ['cpu', 'cuda']
-    
+    mask_classes = ['both', 'ggo', 'merge']
+    assert config.mask_type in mask_classes
+
     # use pretrained?
     use_pretrained_model = config.use_pretrained_model
     pretrained_model = config.model
     if use_pretrained_model and pretrained_model is None:
         print("Model not provided, training from scratch")
         use_pretrained_model = False
-    if not use_pretrained_model and model is not None:
+    if not use_pretrained_model and pretrained_model is not None:
         print("It seems you want to load the weights")
         use_pretrained_model = True
-        backbone=False 
-    # 
+        backbone=False
+    #
     if use_pretrained_model:
        model = torch.load(pretrained_model)
     # import arguments from the config file
-    start_epoch, model_name, backbone, num_epochs, save_dir, train_data_dir, val_data_dir, imgs_dir, gt_dir, batch_size, device, save_every, lrate = \
+    start_epoch, model_name, backbone, num_epochs, save_dir, train_data_dir, val_data_dir, imgs_dir, gt_dir, batch_size, device, save_every, lrate, rpn_nms, mask_type = \
         config.start_epoch, config.model_name, config.use_pretrained_resnet_backbone, config.num_epochs, config.save_dir, \
-        config.train_data_dir, config.val_data_dir, config.imgs_dir, config.gt_dir, config.batch_size, config.device, config.save_every, config.lrate
+        config.train_data_dir, config.val_data_dir, config.imgs_dir, config.gt_dir, config.batch_size, config.device, config.save_every, config.lrate, config.rpn_nms_th, config.mask_type
 
     if use_pretrained_model:
        backbone=False
-     
+
     assert device in devices
     if not save_dir in os.listdir('.'):
        os.mkdir(save_dir)
@@ -67,11 +69,11 @@ def main(config, main_step):
     # Alex: could be added in the config file in the future
     # parameters for the dataset
     dataset_covid_pars_train = {'stage': 'train', 'gt': os.path.join(train_data_dir, gt_dir),
-                                'data': os.path.join(train_data_dir, imgs_dir)}
+                                'data': os.path.join(train_data_dir, imgs_dir), 'mask_type':mask_type, 'ignore_small':True}
     datapoint_covid_train = dataset.CovidCTData(**dataset_covid_pars_train)
 
     dataset_covid_pars_eval = {'stage': 'eval', 'gt': os.path.join(val_data_dir, gt_dir),
-                               'data': os.path.join(val_data_dir, imgs_dir)}
+                               'data': os.path.join(val_data_dir, imgs_dir), 'mask_type':mask_type, 'ignore_small':True}
     datapoint_covid_eval = dataset.CovidCTData(**dataset_covid_pars_eval)
     ###############################################################################################
     dataloader_covid_pars_train = {'shuffle': True, 'batch_size': batch_size}
@@ -82,10 +84,13 @@ def main(config, main_step):
     ###############################################################################################
     # MASK R-CNN model
     # Alex: these settings could also be added to the config
-    maskrcnn_args = {'min_size': 512, 'max_size': 1024, 'rpn_batch_size_per_image': 1024, 'rpn_positive_fraction': 0.75,
+    if mask_type == "both":
+        n_c = 3
+    else:
+        n_c = 2
+    maskrcnn_args = {'min_size': 512, 'max_size': 1024, 'rpn_batch_size_per_image': 256, 'rpn_positive_fraction': 0.75,
                      'box_positive_fraction': 0.75, 'box_fg_iou_thresh': 0.75, 'box_bg_iou_thresh': 0.5,
-                     'num_classes': None, 'box_batch_size_per_image': 1024, 'box_nms_thresh': 0.75,
-                     'rpn_nms_thresh': 0.75}
+                     'num_classes': None, 'box_batch_size_per_image': 256, 'rpn_nms_thresh': rpn_nms}
 
     # Alex: for Ground glass opacity and consolidatin segmentation
     # many small anchors
@@ -104,9 +109,9 @@ def main(config, main_step):
     # num_classes:3 (1+2)
     box_head_input_size = 256 * 7 * 7
     box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=3)
+    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
     mask_roi_pool = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0, 1, 2, 3], output_size=14, sampling_ratio=2)
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=3)
+    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
 
     maskrcnn_args['rpn_anchor_generator'] = anchor_generator
     maskrcnn_args['mask_roi_pool'] = mask_roi_pool
@@ -121,8 +126,8 @@ def main(config, main_step):
         maskrcnn_model.load_state_dict(model['model_weights'])
         if model['epoch']:
            start_epoch = int(model['epoch'])
-        if model['model_name']:
-           model_name = model['model_name']
+        if 'model_name' in model.keys():
+           model_name = str(model['model_name'])
 
     # Set to training mode
     print(maskrcnn_model)
@@ -130,11 +135,13 @@ def main(config, main_step):
 
     optimizer_pars = {'lr': lrate, 'weight_decay': 1e-3}
     optimizer = torch.optim.Adam(list(maskrcnn_model.parameters()), **optimizer_pars)
-    if use_pretrained_model and model['optimizer_state']:
+    if use_pretrained_model and 'optimizer_state' in model.keys():
        optimizer.load_state_dict(model['optimizer_state'])
 
     start_time = time.time()
-
+    if start_epoch>0:
+       num_epochs += start_epoch
+    print("Start training, epoch = {:d}".format(start_epoch))
     for e in range(start_epoch, num_epochs):
         train_loss_epoch = main_step("train", e, dataloader_covid_train, optimizer, device, maskrcnn_model, save_every,
                                 lrate, model_name, None, None)
