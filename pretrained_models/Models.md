@@ -1,13 +1,16 @@
-Download the two pretrained weights, zipped file (~300Mb):
+Download the pretrained weights, zipped file (~480Mb):
 
-https://drive.google.com/drive/folders/17j8LjLmCyIe7HfzN_uVrapiRgqrXJWWY?fbclid=IwAR1QSr5ucgYAbT1HQnn4TW3fA1eudW5pYy7PfwTMHj2T5WMzn33ehh8FOj0
+https://drive.google.com/file/d/177dY9jSSCsk-de2pAH9TZnO6TaC56VfX/view?usp=sharing
 
-Both models are introduced in the paper.
 
-1. Segmentation weights: `segmentation_model.pth`, Ground Glass Opacity and Consolidation segmentation predictions. 
+1. Segmentation weights for two positive classes: `segmentation_model_two_classes.pth`, Ground Glass Opacity and Consolidation segmentation predictions. 
 
-2. COVID-CT-Mask-Net: `classification_model.pth`. These are the weights for the model in which the classification head+batch normalization weights were trained (2.36M in total), with batch normalization history (means+variances) were frozen. 
-I get **91.66%** overall accuracy on the test data, **90.80%** COVID sensitivity on the test split of CNCB CT scans dataset (20182 images).
+2. Segmentation weights for one class (merged masks): `segmentation_model_merged_masks.pth`, lesion predictions. 
 
+3. COVID-CT-Mask-Net: `classification_model_two_classes.pth`. The best classification model derived from the segmentation model with two classes. 
+I get **95.64%** overall accuracy on the test data, **93.88%** COVID sensitivity on the test split of CNCB CT scans dataset (21192 images).
+
+4. COVID-CT-Mask-Net: `classification_model_merged_masks.pth`.  The best classification model derived from the segmentation model with the merged masks.  
+I get **96.33%** overall accuracy on the test data, **92.68%** COVID sensitivity on the test split of CNCB CT scans dataset (21192 images).
 
 
