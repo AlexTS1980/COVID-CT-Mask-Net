@@ -33,14 +33,14 @@ I uploaded 2 segmentation models (one with the merged masks, one with two separa
 |:-:	|:-:	|:-:	|:-:	|
 | **Control** 	| 9236 	| 188 	| 26 	|
 | **CP** 	| 116 	| 7150 	| 129 	|
-| **COVID** 	| 20 	| 298 	| 4028 	|
+| **COVID-19** 	| 20 	| 298 	| 4028 	|
 
 **COVID-CT-Mask-Net (GGO + C masks)**: COVID-19 sensitivity: 93.88%, overall accuracy: 95.64%
 |  	| Control 	| CP 	| COVID-19 	|
 |:-:	|:-:	|:-:	|:-:	|
 | **Control** 	| 9158 	| 278 	| 14 	|
 | **CP** 	| 204 	| 7030 	| 161 	|
-| **COVID** 	| 15 	| 251 	| 4080 	|
+| **COVID-19** 	| 15 	| 251 	| 4080 	|
 
 All training, evaluation and inference scripts, as well as the segmentation dataset interface accept `mask_type` argument, one of `both` (GGO + C), `ggo` (only GGO) and `merge` (merged GGO and C masks). The effect on the size of the model is marginal. The paper covering these changes will be uploaded within the next few days.      
 
