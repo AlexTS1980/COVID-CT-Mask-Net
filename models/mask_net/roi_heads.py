@@ -394,9 +394,7 @@ class RoIHeads(torch.nn.Module):
                # get the indices to fill in with the values from the keep vector, make sure 0 is the first value, and add the last index=RoI batch size
                inds_rand = torch.cat((torch.tensor([0]), torch.randperm(self.detections_per_img-2)[:keep.size().numel()-1].sort().values+1, torch.tensor([self.detections_per_img])),0).unique()
                for idxs, posts in enumerate(inds_rand[:-1]):
-                   #print(idxs, posts, keep[idxs])
                    keep_aug[posts:inds_rand[idxs+1]] = keep[idxs].expand(inds_rand[idxs+1]-posts)
-               #print('kk', keep_aug, keep)
                keep=keep_aug
 
             # 6. Do the same with the uncencoded boxes

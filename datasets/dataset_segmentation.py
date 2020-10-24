@@ -82,7 +82,6 @@ class CovidCTData(data.Dataset):
         # print(mask_classes)
         # extract bounding boxes and masks for each object
         for _idx, m in enumerate(mask_classes):
-            print('id', _idx)
             lab_mask = method_label(m)
             regions = regionprops(lab_mask)
             for _i, r in enumerate(regions):

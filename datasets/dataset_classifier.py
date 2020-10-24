@@ -45,7 +45,6 @@ class COVID_CT_DATA(data.Dataset):
      # return one datapoint
      def __getitem__(self, idx):
          X,y = self.load_img_label(idx)
-         #print(idx, X.size(), y.size())
          return X,y
 
 
