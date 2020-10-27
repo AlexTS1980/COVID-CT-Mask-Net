@@ -1,10 +1,24 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
-The paper on medrXiv: [COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features](https://www.medrxiv.org/content/10.1101/2020.10.11.20211052v2.full.pdf)
+Papers on medrXiv: 
+
+[Detection and Segmentation of Lesion Areas in Chest CT Scans For The Prediction of COVID-19](https://www.medrxiv.org/content/10.1101/2020.10.23.20218461v1.full.pdf)
+
+[COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features](https://www.medrxiv.org/content/10.1101/2020.10.11.20211052v2.full.pdf)
 
 Bibtex citation ref: 
 
 ```
+@article {Ter-Sarkisov2020.10.23.20218461,
+	author = {Ter-Sarkisov, Aram},
+	title = {Detection and Segmentation of Lesion Areas in Chest CT Scans For The Prediction of COVID-19},
+	elocation-id = {2020.10.23.20218461},
+	year = {2020},
+	doi = {10.1101/2020.10.23.20218461},
+	publisher = {Cold Spring Harbor Laboratory Press},
+	eprint = {https://www.medrxiv.org/content/early/2020/10/27/2020.10.23.20218461.full.pdf},
+	journal = {medRxiv}
+}
 @article {Ter-Sarkisov2020.10.11.20211052,
 	author = {Ter-Sarkisov, Aram},
 	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
