@@ -79,7 +79,6 @@ class CovidCTData(data.Dataset):
         # array  (NUM_CLASS_IN_IMNG, H,W) without bgr+lungs class (merge Class 0 and 1)
         # THIS IS IMPORTANT! CAN TRIGGER CUDA ERROR
         mask_classes = mask == np.unique(mask)[:, None, None][2:]
-        # print(mask_classes)
         # extract bounding boxes and masks for each object
         for _idx, m in enumerate(mask_classes):
             lab_mask = method_label(m)

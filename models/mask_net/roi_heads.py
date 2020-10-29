@@ -435,7 +435,6 @@ class RoIHeads(torch.nn.Module):
             num_images = len(boxes)
             # Alex: concatenate scores and boxes
             for i in range(num_images):
-                #print('check2', scores[0].max())
                 ranked_boxes = torch.cat([scores[i].view(-1,1),res_boxes[i]], dim=1)
                 selected_rois = box_features_out[i][roi_inds]
                 result.append(

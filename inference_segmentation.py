@@ -141,7 +141,6 @@ def test_step(image, device, model, model_name, theta_conf, theta_mask, save_dir
         best_bboxes = bboxes[best_idx]
         best_classes = classes[best_idx]
         best_masks = mask[best_idx]
-        print('bm', best_masks.shape)
         mask_array = np.zeros([best_masks[0].shape[1], best_masks[0].shape[2], 3], dtype=np.uint8)
         fig, ax = plt.subplots(1, 1)
         fig.set_size_inches(12, 6)

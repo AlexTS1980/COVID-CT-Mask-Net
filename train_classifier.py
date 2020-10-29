@@ -161,7 +161,6 @@ def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, mode
     for id, b in enumerate(dataloader):
         optimizer.zero_grad()
         X, y = b
-        print(id, X.size(), e, stage)
         if device == torch.device('cuda'):
             X, y = X.to(device), y.to(device)
         # some batches are less than batch_size
@@ -175,7 +174,6 @@ def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, mode
         # batchify scores/image and compute binary cross-entropy loss
         batch_scores = torch.stack(batch_scores)
         batch_loss = F.binary_cross_entropy_with_logits(batch_scores, y)
-        print(batch_loss)
         if stage == "train":
             batch_loss.backward()
             optimizer.step()

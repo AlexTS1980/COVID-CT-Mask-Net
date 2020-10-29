@@ -125,7 +125,6 @@ def compute_map(model, iou_th, dl, device, mask_th):
             ap, _, _, _ = utils.compute_ap(lab['boxes'], lab['labels'], lab['masks'], bboxes, classes, scores,
                                            predict_mask, iou_threshold=iou_th)
             mean_aps_this_th[v] = ap
-            print('mmm', ap)
         elif not len(scores) and not len(lab['labels']):
             mean_aps_this_th[v] = 1
         elif not len(scores) and len(lab['labels']) > 0:
