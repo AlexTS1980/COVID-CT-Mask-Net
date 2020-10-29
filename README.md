@@ -28,6 +28,20 @@ Bibtex citation ref:
 	journal = {medRxiv}
 }
 ```
+## Update 29/10/20
+Column 1: Input CT scan slice overlaid with the output of the segmentation model. 
+
+Column 2: Mask maps logit scores (pixel-level) predicted by Mask R-CNN *independently of each other*, i.e. they were output by different RoIs and resized to fit the bounding box prediction. Note COVID-CT-Mask-Net uses a fixed number of RoIs. Only the highest-ranking RoIs are plotted here to avoid the image clutter.
+
+Column 3: ground truth masks for lesions (yellow) and lungs (green, treated as a background).
+
+Column 4: true class (green) and logit scores output by COVID-CT-Mask-Net (red) using the score map's inputs. Note how the classification model learns the distribution and ranking of the regional predictions (bounding boxes and confidence scores) to predict the global (image) class.
+
+<p align="center">
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/segmentation_map_classification_score.png" width="800" height="500" align="center"/>
+</p>
+
+
 ## Update 19-22/10/20
 I added a large number of updates across all models. Now you can train segmentation and classification models with 3 types of masks: two masks (GGO and C), only GGO and merged GGO and C  masks('lesion'). 
 
