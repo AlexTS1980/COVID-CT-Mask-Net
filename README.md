@@ -143,6 +143,6 @@ In this case the weights for all parameters except **S** are copied from the seg
 
 There are two groups of hyperparameters: training (learning rate, weight regularization, optimizer, etc) and Mask R-CNN hyperparameters (Non-max suppression threshold, RPN and RoI batch size, RPN output, RoI score threshold, etc). The ones in the training scripts are the ones we used to get the models in the paper and the results. For the segmentation model you can use any you want, but for COVID-CT-Mask-Net the RoI score threshold (`box_score_thresh`) must be negative (e.g. `-0.01`), because otherwise not all box predictions (`box_detections_per_img`) will be accepted, and the classification module **S** will not get the batch of the right size, hence you will get a tensor mismatch error.
 
-Also, our re-implementation of torchvision's Mask R-CNN has a hack that allows maintaining the same batch size regardless of the pre-set `box_score_thresh`. 
+[Update 22/10/20:] Also, our re-implementation of torchvision's Mask R-CNN has a hack that allows maintaining the same batch size regardless of the pre-set `box_score_thresh`. 
 
 For any questions, contact Alex Ter-Sarkisov: (alex.ter-sarkisov@city.ac.uk)
