@@ -28,6 +28,20 @@ Bibtex citation ref:
 	journal = {medRxiv}
 }
 ```
+## Update 01/11/20
+I re-implemented torchvision's segmentation interface locally, in the end it was easier to keep two different files for RPN and RoI for segmentation and classification tasks: `rpn_segmentation, roi_segmentation` vs `roi` and `rpn`. For the validation split in `test_split_segmentation.txt` I get the following results for the two lightweight and two best full models: 
+
+|  	| AP@0.5 	| AP@0.75 	| mAP@[0.5:0.95:0.05] 	| Model size
+|:-:	|:-:	|:-:	|:-:|:-:	
+| **Lightweight model (truncated ResNet34+FPN)** 	| 67.16% 	| 42.97% 	| 45.01% 	| 11.45M|
+| **Lightweight model (truncated ResNet18+FPN)** 	| 63.20% 	| 37.29% 	| 42.71% 	|6.12M|
+| **Mask R-CNN (merged masks)** 	| 70.93% 	| 44.26% 	| 46.46% 	|31.78M|
+| **Mask R-CNN (GGO + C masks)**        |  50.74%| 29.92$|34.06%|31.78M|
+
+The penultimate column is the mean over 10 IoU thresholds, the main metric in the MS COCO leaderboard. 
+
+For each script, two additional arguments were added: `backbone_name`, one of `resnet18, resnet34, resnet50` and `truncation`, one of `0,1,2`. For `resnet50`, only the full (base torchvision model) output is implemented, with 4 connections to FPN. For `resnet18` and `resnet34`, `truncation=0` means use the full backbone model, for `truncation=1` the last block is deleted and `truncation=2` the last two layers are deleted. Only the last layer is connected to the FPN. 
+
 ## Update 29/10/20
 Column 1: Input CT scan slice overlaid with the output of the segmentation model. 
 
@@ -45,16 +59,7 @@ Column 4: true class (green) and logit scores output by COVID-CT-Mask-Net (red) 
 ## Update 19-22/10/20
 I added a large number of updates across all models. Now you can train segmentation and classification models with 3 types of masks: two masks (GGO and C), only GGO and merged GGO and C  masks('lesion'). 
 
-I added methods in the `utils` script to compute the accuracy (mean Average Precision) of Mask R-CNN segmentation models. They are based on matterport's package, but purely in pytorch, no requirements for RLE or pycocotools. A new evaluation script, `evaluation_mean_ap`, which uses these methods for a range of Intersect over Union (IoU) thresholds, has been added too. For the validation split in `test_split_segmentation.txt` I get the following results: 
-
-|  	| AP@0.5 	| AP@0.75 	| mAP@[0.5:0.95:0.05] 	|
-|:-:	|:-:	|:-:	|:-:	|
-| **Mask R-CNN (merged masks)** 	| 61.92% 	| 45.22% 	| 44.68% 	|
-| **Mask R-CNN (GGO + C masks)**        |  50.20%| 41.98$|38.71%|
-
-The last column is the mean over 10 IoU thresholds, the main metric in the MS COCO leaderboard.
-
-I uploaded 2 segmentation models (one with the merged masks, one with two separate masks) and 2 classification models (same). On the COVIDx-CT test split (21192) I get the following confusion matrix:
+I added methods in the `utils` script to compute the accuracy (mean Average Precision) of Mask R-CNN segmentation models. They are based on matterport's package, but purely in pytorch, no requirements for RLE or pycocotools. A new evaluation script, `evaluation_mean_ap`, which uses these methods for a range of Intersect over Union (IoU) thresholds, has been added too. 
 
 **COVID-CT-Mask-Net (merged masks)**: COVID-19 sensitivity: 93.55%, overall accuracy: 96.33%
 |  	| Control 	| CP 	| COVID-19 	|
