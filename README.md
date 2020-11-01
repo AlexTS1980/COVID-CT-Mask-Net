@@ -19,6 +19,7 @@ Bibtex citation ref:
 	eprint = {https://www.medrxiv.org/content/early/2020/10/27/2020.10.23.20218461.full.pdf},
 	journal = {medRxiv}
 }
+
 @article {Ter-Sarkisov2020.10.11.20211052,
 	author = {Ter-Sarkisov, Aram},
 	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
@@ -29,18 +30,45 @@ Bibtex citation ref:
 }
 ```
 ## Update 01/11/20
-I re-implemented torchvision's segmentation interface locally, in the end it was easier to keep two different files for RPN and RoI for segmentation and classification tasks: `rpn_segmentation, roi_segmentation` vs `roi` and `rpn`. For the validation split in `test_split_segmentation.txt` I get the following results for the two lightweight and two best full models: 
+I re-implemented torchvision's segmentation interface locally, in the end it was easier to keep two different files for RPN and RoI for segmentation and classification tasks: `rpn_segmentation, roi_segmentation` vs `roi` and `rpn`. For the validation split in `test_split_segmentation.txt` I get the following results for the two lightweight and two best full models (ResNet50+FPN backbone): 
 
-|  	| AP@0.5 	| AP@0.75 	| mAP@[0.5:0.95:0.05] 	| Model size
+|  Model	| AP@0.5 	| AP@0.75 	| mAP@[0.5:0.95:0.05] 	| Model size
 |:-:	|:-:	|:-:	|:-:|:-:	
 | **Lightweight model (truncated ResNet34+FPN)** 	| 67.16% 	| 42.97% 	| 45.01% 	| 11.45M|
 | **Lightweight model (truncated ResNet18+FPN)** 	| 63.20% 	| 37.29% 	| 42.71% 	|6.12M|
-| **Mask R-CNN (merged masks)** 	| 70.93% 	| 44.26% 	| 46.46% 	|31.78M|
-| **Mask R-CNN (GGO + C masks)**        |  50.74%| 29.92$|34.06%|31.78M|
+| **Full model (merged masks)** 	| 70.93% 	| 44.26% 	| 46.46% 	|31.78M|
+| **Full model (GGO + C masks)**        |  50.74%| 29.92$|34.06%|31.78M|
 
 The penultimate column is the mean over 10 IoU thresholds, the main metric in the MS COCO leaderboard. 
 
 For each script, two additional arguments were added: `backbone_name`, one of `resnet18, resnet34, resnet50` and `truncation`, one of `0,1,2`. For `resnet50`, only the full (base torchvision model) output is implemented, with 4 connections to FPN. For `resnet18` and `resnet34`, `truncation=0` means use the full backbone model, for `truncation=1` the last block is deleted and `truncation=2` the last two layers are deleted. Only the last layer is connected to the FPN. 
+
+To evaluate the model, run (e.g., for the lightweight with ResNet18+FPN backbone and truncated last block: 
+```
+python3 evaluation_mean_ap.py --backbone_name resnet18 --ckpt model.pth --mask_type merge --truncation 1 --rpn_nms_th 0.75 --roi_nms_th 0.5 --confidence_th 0.05 
+```
+To train the segmentation model from scratch to get the results above:
+```
+python3.5 train_segmentation.py --num_epochs 100 --mask_type merge --save_every 10 --backbone_name resnet18 --truncation 1 --device cuda
+```
+Results of the classification models derived from the segmentation models above (class sensitivity and overall accuracy):
+
+
+| Model 	| Control 	| CP 	| COVID-19 	| Overall accuracy
+|:-:	|:-:	|:-:	|:-:	|:-:
+| **Lightweight model (truncated ResNet34+FPN)** 	|  92.89%	| 91.70% 	| 91.76% 	|92.89%|
+| **Lightweight model (truncated ResNet18+FPN)** 	| 96.98% 	| 91.63% 	| 91.35% 	|93.95%|
+| **Full model (merged masks)** 	| 97.74% 	| 96.69% 	| 92.68% 	|96.33%|
+| **Full model (both masks)** 	| 96.91% 	| 95.06% 	| 93.88% 	|95.64%|
+
+To train a lightweight classifier, you need to specify the backbone name and the truncation level, it must be the same as in the segmentation model from which it is derived. Also, you need to define the size of the RoI batch: roi_batch_size, which is equal to the input in the classification module, number of masks on which the segmentation model was trained `num_class` (2 for merged and 3 for separate) and the number of features in the classification module **S**, `s_features`. You need at least the pretrained weights from a segmentation model. **You cannot train COVID-CT-Mask-Net classifier from scratch.** 
+```
+python3 train_classifier.py --pretrained_segmentation_model segmentation_model.pth --backbone_name resnet34 --num_epochs 50 --save_every 10 --num_class 2 --truncation 1 --s_features 512 --roi_batch_size 128 --batch_size 8
+```
+In this case the weights for all parameters except **S** are copied from the segmentation model, all parameters in **S** and weights in the batch normalization layers are updated, but the stats in the batch normalization layers (means and variances) are frozen. After about 50 epochs (2h15min hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy reported above. To evaluate the classifier:
+```
+python3 evaluate_classifier.py --ckpt classification_model.pth --truncation 1 --num_class 2 --backbone_name resnet34 --roi_batch_size 128 --device cuda --s_features 512
+```
 
 ## Update 29/10/20
 Column 1: Input CT scan slice overlaid with the output of the segmentation model. 
@@ -75,7 +103,7 @@ I added methods in the `utils` script to compute the accuracy (mean Average Prec
 | **CP** 	| 204 	| 7030 	| 161 	|
 | **COVID-19** 	| 15 	| 251 	| 4080 	|
 
-All training, evaluation and inference scripts, as well as the segmentation dataset interface accept `mask_type` argument, one of `both` (GGO + C), `ggo` (only GGO) and `merge` (merged GGO and C masks). The effect on the size of the model is marginal. The paper covering these changes will be uploaded within the next few days.      
+All segmentation scripts as well as the segmentation dataset interface accept `mask_type` argument, one of `both` (GGO + C), `ggo` (only GGO) and `merge` (merged GGO and C masks). The effect on the size of the model is marginal.       
 
 ## 1. Segmentation Model
 <p align="center">
@@ -111,6 +139,7 @@ To get the reported results, and for the COVID-CT-Mask-Net classsifier, we train
 
 ## 2. COVID-CT-Mask-Net (Classification Model) 
 
+### 2.1 Full model (ResNet50+FPN backbone)
 **The model**
 <p align="center">
 <img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid_ct_mask_net.png" width="800" height="300" align="center"/>
@@ -122,22 +151,34 @@ To get the reported results, and for the COVID-CT-Mask-Net classsifier, we train
 </p>
 
 I reimplemented torchvision's detection library(https://github.com/pytorch/vision/tree/master/torchvision/models/detection) in `/models/mask_net/` with the classification module **s2_new** (**S** in the paper) and other hacks that convert Mask R-CNN into a classification model.
-First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download), a total of over 100K CT scans. The COVIDx-CT split we used is here: https://github.com/haydengunraj/COVIDNet-CT/blob/master/docs/dataset.md). To extract the COVID-19, pneumonia and normal scans, follow the instructions in the link to COVIDx-CT. You don't need to do any image preprocessing as inthe COVIDNet-CT model. We used the full validation and test split, and a small share of the training data, our sample is in `train_split_classification.txt`. To follow the convention used in the other two datsets, we set Class 0: Control, Class 1: Normal Pneumonia, Class 2: COVID. Thus the dataset interface `datasets/dataset_classification.py` extracts the labels from the file names. The convention for the names must be `[Class]_[PatientID]_[ScanNum]_[SliceNum].png`.
+First, download and unpack the CNCB dataset: (http://ncov-ai.big.ac.cn/download), a total of over 100K CT scans. The COVIDx-CT split we used is here: https://github.com/haydengunraj/COVIDNet-CT/blob/master/docs/dataset.md). To extract the COVID-19, pneumonia and normal scans, follow the instructions in the link to COVIDx-CT. You don't need to do any image preprocessing as inthe COVIDNet-CT model. We used the full validation and test split, and a small share of the training data, our sample is in `train_split_classification.txt`. To follow the convention used in the other two datsets, we set Class 0: Control, Class 1: Normal Pneumonia, Class 2: COVID. Thus the dataset interface `datasets/dataset_classification.py` extracts the labels from the file names. The convention for the names must be `[Class]_[PatientID]_[ScanNum]_[SliceNum].png`. To train the classifier, copy the images following this convention into a separate directory, e.g. `train_small`.
 
-To evaluate the pretrained model, run
+### 2.2 Lightweight Models (Truncated ResNet18/34+FPN backbone)
 
-```
-python3.5 evaluate_classifier.py --ckpt pretrained_models/classification_model_two_classes.pth --test_data_dir covid_data/cncb/test --mask_type both
-```
-You should get about **93.88%** COVID-19 sensitivity and **95.64%** overall accuracy. For the merged masks, run
-```
-python3.5 evaluate_classifier.py --ckpt pretrained_models/classification_model_merged_masks.pth --test_data_dir covid_data/cncb/test --mask_type merge
-```
-You should get about **93.55%** COVID-19 sensitivity and **96.33%** overall accuracy. To train the model, copy the images in the `train_split_classification.txt` split into a separate folder (e.g. `train_small`). You need at least the pretrained weights from a segmentation model. **You cannot train COVID-CT-Mask-Net classifier from scratch.**
-```
-python3 train_classifier.py --pretrained_segmentation_model pretrained_models/segmentation_model_both_classes.pth --train_data_dir train_small --num_epochs 50 --save_every 10 --batch_size 8 --device cuda --mask_type both
-```
-In this case the weights for all parameters except **S** are copied from the segmentation model, all parameters in **S** and weights in the batch normalization layers are updated, but the stats in the batch normalization layers (means and variances) are frozen. After about 50 epochs (8 hours on an a GPU with 8Gb VRAM) you should get the model with the accuracy reported above. 
+I implemented two backbones, ResNet18 and ResNet34, both with a single FPN module, and two truncations: the last block or two last blocks. 
+
+Backbone model:
+<p align="center">
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/resnet18.png" width="400" height="150" align="center"/>
+</p>
+
+The classification model with the lightweight backbone:
+<p align="center">
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid_ct_mask_net_resnet18.png" width="300" height="150" align="center"/>
+</p>
+
+Here's the full size comparison:
+
+| Model	| Total #parameters| #Trainable parameters|
+|:-:	|:-:	|:-:	|	
+| **Lightweight model, 5 blocks, ResNet34+FPN** 	| 24.86M|0.6M|
+| **Lightweight model, 4 blocks, ResNet34+FPN** 	| 11.74M|0.6M|
+| **Lightweight model, 3 blocks, ResNet34+FPN** 	| 4.92M|0.6M|
+| **Lightweight model, 5 blocks, ResNet18+FPN** 	| 14.75M|0.6M|
+| **Lightweight model, 4 blocks, ResNet18+FPN** 	| 6.35M|0.6M|
+| **Lightweight model, 3 blocks, ResNet18+FPN** 	| 4.25M|0.6M|
+|**Full model, 5 blocks, ResNet50+FPN (4 layers)**|34.14M|2.36M|
+
 
 ## 3. Models' hyperparameters
 
