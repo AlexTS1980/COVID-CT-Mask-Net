@@ -1,7 +1,12 @@
-Download the pretrained weights, zipped file (~480Mb):
+These are the weights for the best models reported in the papers. 
+
+1,3: https://www.medrxiv.org/content/medrxiv/early/2020/10/14/2020.10.11.20211052.1.full.pdf
+
+2,4: https://www.medrxiv.org/content/medrxiv/early/2020/10/27/2020.10.23.20218461.full.pdf
+
+Download the pretrained weights, zipped file (~590Mb):
 
 https://drive.google.com/file/d/177dY9jSSCsk-de2pAH9TZnO6TaC56VfX/view?usp=sharing
-
 
 1. Segmentation weights for two positive classes: `segmentation_model_two_classes.pth`, Ground Glass Opacity and Consolidation segmentation predictions. 
 
