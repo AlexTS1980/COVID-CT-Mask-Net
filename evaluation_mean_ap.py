@@ -1,5 +1,9 @@
-# torchvision:
-# /home/enterprise.internal.city.ac.uk/sbrn151/.local/lib/python3.5/site-packages/torchvision/models/detection/__init__.py
+
+# Mask R-CNN model for lesion segmentation in chest CT scans
+# Torchvision detection package is locally re-implemented
+# by Alex Ter-Sarkisov@City, University of London
+# 2020
+
 import argparse
 import os
 from collections import OrderedDict
@@ -11,16 +15,20 @@ import torchvision
 # implementation of the mAP
 import utils
 from datasets import dataset_segmentation as dataset
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, TwoMLPHead
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from torchvision.models.detection.mask_rcnn import maskrcnn_resnet50_fpn
-from torchvision.models.detection.rpn import AnchorGenerator
-
+import models.mask_net as mask_net
+from models.mask_net.rpn_segmentation import AnchorGenerator
+from models.mask_net.faster_rcnn import FastRCNNPredictor, TwoMLPHead
+from models.mask_net.covid_mask_net import MaskRCNNHeads, MaskRCNNPredictor
 
 def main(config, step):
     devices = ['cpu', 'cuda']
     mask_classes = ['both', 'ggo', 'merge']
+    backbones = ['resnet50', 'resnet34', 'resnet18']
+    truncation_levels = ['0','1','2']
     assert config.device in devices
+    assert config.backbone_name in backbones
+    assert config.truncation in truncation_levels
+
     if config.device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -34,10 +42,11 @@ def main(config, step):
     device = torch.device('cpu')
     if torch.cuda.is_available():
         device = torch.device('cuda')
+
     # get the thresholds
-    confidence_threshold, mask_threshold, save_dir, data_dir, ims_dir, gt_dir, mask_type, rpn_nms, roi_nms \
+    confidence_threshold, mask_threshold, save_dir, data_dir, img_dir, gt_dir, mask_type, rpn_nms, roi_nms, backbone_name, truncation \
         = config.confidence_th, config.mask_logits_th, config.save_dir, config.test_data_dir, config.test_imgs_dir, \
-        config.gt_dir, config.mask_type, config.rpn_nms_th, config.roi_nms_th
+        config.gt_dir, config.mask_type, config.rpn_nms_th, config.roi_nms_th, config.backbone_name, config.truncation
 
     if model_name is None:
         model_name = "maskrcnn_segmentation"
@@ -53,34 +62,39 @@ def main(config, step):
         n_c = 2
     # dataset interface
     dataset_covid_eval_pars = {'stage': 'eval', 'gt': os.path.join(data_dir, gt_dir),
-                               'data': os.path.join(data_dir, ims_dir), 'mask_type': mask_type, 'ignore_small':True}
+                               'data': os.path.join(data_dir, img_dir), 'mask_type': mask_type, 'ignore_small':True}
     datapoint_eval_covid = dataset.CovidCTData(**dataset_covid_eval_pars)
     dataloader_covid_eval_pars = {'shuffle': False, 'batch_size': 1}
     dataloader_eval_covid = data.DataLoader(datapoint_eval_covid, **dataloader_covid_eval_pars)
-    #
     # MASK R-CNN model
     # Alex: these settings could also be added to the config
     ckpt = torch.load(config.ckpt, map_location=device)
     sizes = ckpt['anchor_generator'].sizes
     aspect_ratios = ckpt['anchor_generator'].aspect_ratios
     anchor_generator = AnchorGenerator(sizes, aspect_ratios)
-    print("Anchors: ", anchor_generator)
+    print("Anchors: ", anchor_generator.sizes, anchor_generator.aspect_ratios)
 
     # create modules
+    # this assumes FPN with 256 channels
     box_head = TwoMLPHead(in_channels=7 * 7 * 256, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
-    mask_roi_pool = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0, 1, 2, 3], output_size=14, sampling_ratio=2)
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
+    if backbone_name == 'resnet50':
+       maskrcnn_heads = None
+       box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
+       mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
+    else:
+       #Backbone->FPN->boxhead->boxpredictor
+       box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
+       maskrcnn_heads = MaskRCNNHeads(in_channels=256, layers=(128,), dilation=1)
+       mask_predictor = MaskRCNNPredictor(in_channels=128, dim_reduced=128, num_classes=n_c)
+
     # keyword arguments
     maskrcnn_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': 128,
                      'box_nms_thresh': roi_nms, 'box_score_thresh': confidence_threshold, 'rpn_nms_thresh': rpn_nms,
-                     'box_head': box_head,
-                     'rpn_anchor_generator': anchor_generator, 'mask_roi_pool': mask_roi_pool,
+                     'box_head': box_head, 'rpn_anchor_generator': anchor_generator, 'mask_head':maskrcnn_heads,
                      'mask_predictor': mask_predictor, 'box_predictor': box_predictor}
 
     # Instantiate the segmentation model
-    maskrcnn_model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=False,
-                                                                        progress=False, **maskrcnn_args)
+    maskrcnn_model = mask_net.maskrcnn_resnet_fpn(backbone_name, truncation, pretrained_backbone=False, **maskrcnn_args)
     # Load weights
     maskrcnn_model.load_state_dict(ckpt['model_weights'])
     # Set to the evaluation mode
@@ -98,9 +112,9 @@ def main(config, step):
         th_name = 'AP@{0:.2f}'.format(th)
         ap_th[th_name] = ap
     print("Done evaluation for {}".format(model_name))
-    print("mAP:{0:.2f}".format(mean_aps_all_th.mean().item()))
+    print("mAP:{0:.4f}".format(mean_aps_all_th.mean().item()))
     for k, aps in ap_th.items():
-        print("{0:}:{1:.2f}".format(k, aps))
+        print("{0:}:{1:.4f}".format(k, aps))
 
 
 def compute_map(model, iou_th, dl, device, mask_th):

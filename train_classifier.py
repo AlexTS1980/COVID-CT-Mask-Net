@@ -13,15 +13,15 @@ import config_classifier
 import cv2
 import datasets.dataset_classifier as dataset
 # IMPORT LOCAL IMPLEMENTATION OF TORCHVISION'S DETECTION LIBRARY
-import models.mask_net as mask_net
 import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision
 import utils
 from PIL import Image as PILImage
-# I renamed Mask R-CNN interface to COVID_MASK_NET for convenience
-from models.mask_net.covid_mask_net import MaskRCNNPredictor
+# IMPORT LOCAL IMPLEMENTATION OF TORCHVISION'S DETECTION LIBRARY
+# Faster R-CNN interface
+import models.mask_net as mask_net
 from models.mask_net.faster_rcnn import FastRCNNPredictor, TwoMLPHead
 from models.mask_net.rpn import AnchorGenerator
 from torch.utils import data
@@ -33,15 +33,22 @@ def main(config, main_step):
     torch.manual_seed(time.time())
     start_time = time.time()
     devices = ['cpu', 'cuda']
-    mask_classes = ['both', 'ggo', 'merge']
-    assert config.mask_type in mask_classes
+    backbones = ['resnet50', 'resnet34', 'resnet18']
+    truncation_levels = ['0','1','2']
+    assert config.device in devices
+    assert config.backbone_name in backbones
+    assert config.truncation in truncation_levels
 
     start_epoch, pretrained_classifier, pretrained_segment, model_name, num_epochs, save_dir, train_data_dir, val_data_dir, \
-    batch_size, device, save_every, lrate, rpn_nms, roi_nms, mask_type = config.start_epoch, config.pretrained_classification_model, \
+    batch_size, device, save_every, lrate, rpn_nms, roi_nms, backbone_name, truncation, roi_batch_size, n_c, s_features = \
+                                            config.start_epoch, config.pretrained_classification_model, \
                                             config.pretrained_segmentation_model, \
                                             config.model_name, config.num_epochs, config.save_dir, \
                                             config.train_data_dir, config.val_data_dir, \
-                                            config.batch_size, config.device, config.save_every, config.lrate, config.rpn_nms_th, config.roi_nms_th, config.mask_type
+                                            config.batch_size, config.device, config.save_every, \
+                                            config.lrate, config.rpn_nms_th, config.roi_nms_th, \
+                                            config.backbone_name, config.truncation, \
+                                            config.roi_batch_size, config.num_classes, config.s_features
 
     if pretrained_classifier is not None and pretrained_segment is not None:
         print("Not clear which model to use, switching to the classifier")
@@ -51,17 +58,10 @@ def main(config, main_step):
     else:
         pretrained_model = pretrained_segment
 
-    assert device in devices
     if device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-
-    # which type of mask?
-    if mask_type == "both":
-        n_c = 3
-    else:
-        n_c = 2
     ##############################################################################################
     # DATASETS+DATALOADERS
     # Alex: could be added in the config file in the future
@@ -88,29 +88,24 @@ def main(config, main_step):
     # set both NMS thresholds to 0.75 to get adjacent RoIs
     # Box detections/image: batch size for the classifier
     #
-    covid_mask_net_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': 256,
+    covid_mask_net_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': roi_batch_size,
                            'box_nms_thresh': roi_nms, 'box_score_thresh': -0.01, 'rpn_nms_thresh': rpn_nms}
 
     # copy the anchor generator parameters, create a new one to avoid implementations' clash
     sizes = ckpt['anchor_generator'].sizes
     aspect_ratios = ckpt['anchor_generator'].aspect_ratios
     anchor_generator = AnchorGenerator(sizes, aspect_ratios)
-    # out_channels:256
+    # out_channels:256, FPN
     # num_classes:3 (1+2)
-    box_head_input_size = 256 * 7 * 7
-    box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
+    box_head = TwoMLPHead(in_channels=256*7*7, representation_size=128)
     box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
-    # Mask prediction is not necessary, keep it for future extensions
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
-
+    
     covid_mask_net_args['rpn_anchor_generator'] = anchor_generator
-    covid_mask_net_args['mask_predictor'] = mask_predictor
     covid_mask_net_args['box_predictor'] = box_predictor
     covid_mask_net_args['box_head'] = box_head
-
-    covid_mask_net_model = mask_net.maskrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=False, progress=False,
-                                                          **covid_mask_net_args)
-
+    covid_mask_net_args['s_representation_size'] = s_features
+    # Instantiate the model
+    covid_mask_net_model = mask_net.fasterrcnn_resnet_fpn(backbone_name, truncation, **covid_mask_net_args)
     # which parameters to train?
     trained_pars = []
     # if the weights are loaded from the segmentation model:
@@ -123,25 +118,25 @@ def main(config, main_step):
     else:
         covid_mask_net_model.load_state_dict(ckpt['model_weights'])
         if 'epoch' in ckpt.keys():
-            start_epoch = int(ckpt['epoch'])
+            start_epoch = int(ckpt['epoch']) + 1
         if 'model_name' in ckpt.keys():
             model_name = str(ckpt['model_name'])
 
     # Evaluation mode, no labels!
     covid_mask_net_model.eval()
     # set the model to training mode without triggering the 'training' mode of Mask R-CNN
+    # set up the optimizer
     utils.switch_model_on(covid_mask_net_model, ckpt, trained_pars)
     utils.set_to_train_mode(covid_mask_net_model)
     print(covid_mask_net_model)
     covid_mask_net_model = covid_mask_net_model.to(device)
-
     total_trained_pars = sum([x.numel() for x in trained_pars])
     print("Total trained pars {0:d}".format(total_trained_pars))
-
-    optimizer_pars = {'lr': 1e-5, 'weight_decay': 1e-3}
+    optimizer_pars = {'lr': lrate, 'weight_decay': 1e-3}
     optimizer = torch.optim.Adam(trained_pars, **optimizer_pars)
     if pretrained_classifier is not None and 'optimizer_state' in ckpt.keys():
         optimizer.load_state_dict(ckpt['optimizer_state'])
+
     if start_epoch>0:
        num_epochs += start_epoch
     print("Start training, epoch = {:d}".format(start_epoch))
@@ -181,15 +176,15 @@ def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, mode
             pass
         epoch_loss += batch_loss.clone().detach().cpu().numpy()
     epoch_loss = epoch_loss / len(dataloader)
-    if not e % save_every and stage == "eval":
+    if not (e+1) % save_every and stage == "eval":
         model.eval()
-        state = {'epoch': str(e), 'model_weights': model.state_dict(),
+        state = {'epoch': str(e+1), 'model_weights': model.state_dict(),
                  'optimizer_state': optimizer.state_dict(), 'lrate': lrate, 'anchor_generator': anchors,
                  'model_name': model_name}
         if model_name is None:
-            torch.save(state, os.path.join(save_dir, "covid_ct_mask_net" + str(e) + ".pth"))
+            torch.save(state, os.path.join(save_dir, "covid_ct_mask_net_ckpt_" + str(e+1) + ".pth"))
         else:
-            torch.save(state, os.path.join(save_dir, model_name + "_ckpt_" + str(e) + ".pth"))
+            torch.save(state, os.path.join(save_dir, model_name + "_ckpt_" + str(e+1) + ".pth"))
         utils.set_to_train_mode(model)
     return epoch_loss
 

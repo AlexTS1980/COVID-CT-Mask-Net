@@ -1,6 +1,8 @@
-# COVID Mask R-CNN project
-# You must have Torchvision v0.3.0+
-#
+# Mask R-CNN model for lesion segmentation in chest CT scans
+# Torchvision detection package is locally re-implemented
+# by Alex Ter-Sarkisov@City, University of London
+# alex.ter-sarkisov@city.ac.uk
+# 2020
 import argparse
 import time
 import pickle
@@ -9,10 +11,10 @@ import torchvision
 import numpy as np
 import os, sys
 import cv2
-from torchvision.models.detection.rpn import AnchorGenerator
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, TwoMLPHead
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from torchvision.ops import MultiScaleRoIAlign
+import models.mask_net as mask_net
+from models.mask_net.rpn_segmentation import AnchorGenerator
+from models.mask_net.faster_rcnn import FastRCNNPredictor, TwoMLPHead
+from models.mask_net.covid_mask_net import MaskRCNNHeads, MaskRCNNPredictor
 from torch.utils import data
 import torch.utils as utils
 import datasets.dataset_segmentation as dataset
@@ -28,28 +30,16 @@ import config_segmentation as config
 def main(config, main_step):
     devices = ['cpu', 'cuda']
     mask_classes = ['both', 'ggo', 'merge']
+    truncation_levels = ['0','1','2']
+    backbones = ['resnet50', 'resnet34', 'resnet18']
+    assert config.backbone_name in backbones
     assert config.mask_type in mask_classes
+    assert config.truncation in truncation_levels
 
-    # use pretrained?
-    use_pretrained_model = config.use_pretrained_model
-    pretrained_model = config.model
-    if use_pretrained_model and pretrained_model is None:
-        print("Model not provided, training from scratch")
-        use_pretrained_model = False
-    if not use_pretrained_model and pretrained_model is not None:
-        print("It seems you want to load the weights")
-        use_pretrained_model = True
-        backbone=False
-    #
-    if use_pretrained_model:
-       model = torch.load(pretrained_model)
     # import arguments from the config file
-    start_epoch, model_name, backbone, num_epochs, save_dir, train_data_dir, val_data_dir, imgs_dir, gt_dir, batch_size, device, save_every, lrate, rpn_nms, mask_type = \
+    start_epoch, model_name, use_pretrained_resnet_backbone, num_epochs, save_dir, train_data_dir, val_data_dir, imgs_dir, gt_dir, batch_size, device, save_every, lrate, rpn_nms, mask_type, backbone_name, truncation = \
         config.start_epoch, config.model_name, config.use_pretrained_resnet_backbone, config.num_epochs, config.save_dir, \
-        config.train_data_dir, config.val_data_dir, config.imgs_dir, config.gt_dir, config.batch_size, config.device, config.save_every, config.lrate, config.rpn_nms_th, config.mask_type
-
-    if use_pretrained_model:
-       backbone=False
+        config.train_data_dir, config.val_data_dir, config.imgs_dir, config.gt_dir, config.batch_size, config.device, config.save_every, config.lrate, config.rpn_nms_th, config.mask_type, config.backbone_name, config.truncation
 
     assert device in devices
     if not save_dir in os.listdir('.'):
@@ -63,9 +53,16 @@ def main(config, main_step):
         device = torch.device('cpu')
 
     print(device)
+
+    # Load the weights if provided
+    if config.pretrained_model is not None:
+       pretrained_model = torch.load(config.pretrained_model, map_location = device)
+       use_pretrained_resnet_backbone = False
+    else:
+       pretrained_model=None
     torch.manual_seed(time.time())
     ##############################################################################################
-    # DATASETS+DATALOADERS
+    # DATASETS + DATALOADERS
     # Alex: could be added in the config file in the future
     # parameters for the dataset
     dataset_covid_pars_train = {'stage': 'train', 'gt': os.path.join(train_data_dir, gt_dir),
@@ -79,7 +76,7 @@ def main(config, main_step):
     dataloader_covid_pars_train = {'shuffle': True, 'batch_size': batch_size}
     dataloader_covid_train = data.DataLoader(datapoint_covid_train, **dataloader_covid_pars_train)
     #
-    dataloader_covid_pars_eval = {'shuffle': True, 'batch_size': batch_size}
+    dataloader_covid_pars_eval = {'shuffle': False, 'batch_size': batch_size}
     dataloader_covid_eval = data.DataLoader(datapoint_covid_eval, **dataloader_covid_pars_eval)
     ###############################################################################################
     # MASK R-CNN model
@@ -97,37 +94,48 @@ def main(config, main_step):
     # use all outputs of FPN
     # IMPORTANT!! For the pretrained weights, this determines the size of the anchor layer in RPN!!!!
     # pretrained model must have anchors
-    if not use_pretrained_model:
+    if pretrained_model is None:
        anchor_generator = AnchorGenerator(
            sizes=tuple([(2, 4, 8, 16, 32) for r in range(5)]),
            aspect_ratios=tuple([(0.1, 0.25, 0.5, 1, 1.5, 2) for rh in range(5)]))
     else:
-       sizes = model['anchor_generator'].sizes
-       aspect_ratios = model['anchor_generator'].aspect_ratios
-       anchor_generator = AnchorGenerator(sizes, aspect_ratios)
-
+       print("Loading the anchor generator")
+       sizes = pretrained_model['anchor_generator'].sizes
+       aspect_ratios = pretrained_model['anchor_generator'].aspect_ratios
+       anchor_generator = AnchorGenerator(sizes=sizes, aspect_ratios=aspect_ratios)
+       print(anchor_generator, anchor_generator.num_anchors_per_location())
     # num_classes:3 (1+2)
-    box_head_input_size = 256 * 7 * 7
-    box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
-    mask_roi_pool = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0, 1, 2, 3], output_size=14, sampling_ratio=2)
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
+    # in_channels
+    # 256: number if channels from FPN
+    # For the ResNet50+FPN: keep the torchvision architecture, but with 128 features
+    # For lightweights models: re-implement MaskRCNNHeads with a single layer
+    box_head = TwoMLPHead(in_channels=256*7*7,representation_size=128)
+    if backbone_name == 'resnet50':
+       maskrcnn_heads = None
+       box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
+       mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
+    else:
+       #Backbone->FPN->boxhead->boxpredictor
+       box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
+       maskrcnn_heads = MaskRCNNHeads(in_channels=256, layers=(128,), dilation=1)
+       mask_predictor = MaskRCNNPredictor(in_channels=128, dim_reduced=128, num_classes=n_c)
 
+    maskrcnn_args['box_head'] = box_head
     maskrcnn_args['rpn_anchor_generator'] = anchor_generator
-    maskrcnn_args['mask_roi_pool'] = mask_roi_pool
+    maskrcnn_args['mask_head'] = maskrcnn_heads
     maskrcnn_args['mask_predictor'] = mask_predictor
     maskrcnn_args['box_predictor'] = box_predictor
-    maskrcnn_args['box_head'] = box_head
     # Instantiate the segmentation model
-    maskrcnn_model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=backbone,
-                                                                        progress=True, **maskrcnn_args)
+    maskrcnn_model = mask_net.maskrcnn_resnet_fpn(backbone_name, truncation, pretrained_backbone=use_pretrained_resnet_backbone, **maskrcnn_args)
     # pretrained?
-    if use_pretrained_model:
-        maskrcnn_model.load_state_dict(model['model_weights'])
-        if model['epoch']:
-           start_epoch = int(model['epoch'])
-        if 'model_name' in model.keys():
-           model_name = str(model['model_name'])
+    print(maskrcnn_model.backbone.out_channels)
+    if pretrained_model is not None:
+        print("Loading pretrained weights")
+        maskrcnn_model.load_state_dict(pretrained_model['model_weights'])
+        if pretrained_model['epoch']:
+           start_epoch = int(pretrained_model['epoch'])+1
+        if 'model_name' in pretrained_model.keys():
+           model_name = str(pretrained_model['model_name'])
 
     # Set to training mode
     print(maskrcnn_model)
@@ -135,8 +143,8 @@ def main(config, main_step):
 
     optimizer_pars = {'lr': lrate, 'weight_decay': 1e-3}
     optimizer = torch.optim.Adam(list(maskrcnn_model.parameters()), **optimizer_pars)
-    if use_pretrained_model and 'optimizer_state' in model.keys():
-       optimizer.load_state_dict(model['optimizer_state'])
+    if pretrained_model is not None and 'optimizer_state' in pretrained_model.keys():
+       optimizer.load_state_dict(pretrained_model['optimizer_state'])
 
     start_time = time.time()
     if start_epoch>0:
@@ -187,14 +195,15 @@ def step(stage, e, dataloader, optimizer, device, model, save_every, lrate, mode
                 pass
             epoch_loss += total_loss.clone().detach().cpu().numpy()
     epoch_loss = epoch_loss / len(dataloader)
-    if not e % save_every and stage == "eval":
+    if not (e+1) % save_every and stage == "eval":
         model.eval()
-        state = {'epoch': str(e), 'model_name':model_name, 'model_weights': model.state_dict(),
+        state = {'epoch': str(e+1), 'model_name':model_name, 'model_weights': model.state_dict(),
                  'optimizer_state': optimizer.state_dict(), 'lrate': lrate, 'anchor_generator':anchors}
         if model_name is None:
-            torch.save(state, os.path.join(save_dir, "mrcnn_covid_segmentation_model_ckpt_" + str(e) + ".pth"))
+            print(save_dir, "mrcnn_covid_segmentation_model_ckpt_" + str(e+1) + ".pth")
+            torch.save(state, os.path.join(save_dir, "mrcnn_covid_segmentation_model_ckpt_" + str(e+1) + ".pth"))
         else:
-            torch.save(state, os.path.join(save_dir, model_name + "_ckpt_" + str(e) + ".pth"))
+            torch.save(state, os.path.join(save_dir, model_name + "_ckpt_" + str(e+1) + ".pth"))
 
         model.train()
     return epoch_loss

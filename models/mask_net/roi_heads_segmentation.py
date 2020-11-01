@@ -25,12 +25,13 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
 
     labels = torch.cat(labels, dim=0)
     regression_targets = torch.cat(regression_targets, dim=0)
-
+    unique_labels = labels.unique(return_counts=True)
     classification_loss = F.cross_entropy(class_logits, labels)
 
     # get indices that correspond to the regression targets for
     # the corresponding ground truth labels, to be used with
     # advanced indexing
+    
     sampled_pos_inds_subset = torch.nonzero(labels > 0).squeeze(1)
     labels_pos = labels[sampled_pos_inds_subset]
     N, num_classes = class_logits.shape
@@ -43,7 +44,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
     )
     box_loss = box_loss / labels.numel()
 
-    return classification_loss, box_loss
+    return classification_loss, box_loss, unique_labels
 
 
 def maskrcnn_inference(x, labels):
@@ -62,7 +63,6 @@ def maskrcnn_inference(x, labels):
         results (list[BoxList]): one BoxList for each image, containing
             the extra field mask
     """
-    # Alex: keep scores instead of predictions
     #mask_prob = x.sigmoid()
     mask_prob = x
     # select masks coresponding to the predicted classes
@@ -71,7 +71,9 @@ def maskrcnn_inference(x, labels):
     labels = torch.cat(labels)
     index = torch.arange(num_masks, device=labels.device)
     mask_prob = mask_prob[index, labels][:, None]
+
     mask_prob = mask_prob.split(boxes_per_image, dim=0)
+
     return mask_prob
 
 
@@ -99,14 +101,13 @@ def maskrcnn_loss(mask_logits, proposals, gt_masks, gt_labels, mask_matched_idxs
     Return:
         mask_loss (Tensor): scalar tensor containing the loss
     """
-
     discretization_size = mask_logits.shape[-1]
     labels = [l[idxs] for l, idxs in zip(gt_labels, mask_matched_idxs)]
     mask_targets = [
         project_masks_on_boxes(m, p, i, discretization_size)
         for m, p, i in zip(gt_masks, proposals, mask_matched_idxs)
     ]
-
+     
     labels = torch.cat(labels, dim=0)
     mask_targets = torch.cat(mask_targets, dim=0)
 
@@ -118,6 +119,117 @@ def maskrcnn_loss(mask_logits, proposals, gt_masks, gt_labels, mask_matched_idxs
         mask_logits[torch.arange(labels.shape[0], device=labels.device), labels], mask_targets
     )
     return mask_loss
+
+
+def keypoints_to_heatmap(keypoints, rois, heatmap_size):
+    offset_x = rois[:, 0]
+    offset_y = rois[:, 1]
+    scale_x = heatmap_size / (rois[:, 2] - rois[:, 0])
+    scale_y = heatmap_size / (rois[:, 3] - rois[:, 1])
+
+    offset_x = offset_x[:, None]
+    offset_y = offset_y[:, None]
+    scale_x = scale_x[:, None]
+    scale_y = scale_y[:, None]
+
+    x = keypoints[..., 0]
+    y = keypoints[..., 1]
+
+    x_boundary_inds = x == rois[:, 2][:, None]
+    y_boundary_inds = y == rois[:, 3][:, None]
+
+    x = (x - offset_x) * scale_x
+    x = x.floor().long()
+    y = (y - offset_y) * scale_y
+    y = y.floor().long()
+
+    x[x_boundary_inds] = heatmap_size - 1
+    y[y_boundary_inds] = heatmap_size - 1
+
+    valid_loc = (x >= 0) & (y >= 0) & (x < heatmap_size) & (y < heatmap_size)
+    vis = keypoints[..., 2] > 0
+    valid = (valid_loc & vis).long()
+
+    lin_ind = y * heatmap_size + x
+    heatmaps = lin_ind * valid
+
+    return heatmaps, valid
+
+
+def heatmaps_to_keypoints(maps, rois):
+    """Extract predicted keypoint locations from heatmaps. Output has shape
+    (#rois, 4, #keypoints) with the 4 rows corresponding to (x, y, logit, prob)
+    for each keypoint.
+    """
+    # This function converts a discrete image coordinate in a HEATMAP_SIZE x
+    # HEATMAP_SIZE image to a continuous keypoint coordinate. We maintain
+    # consistency with keypoints_to_heatmap_labels by using the conversion from
+    # Heckbert 1990: c = d + 0.5, where d is a discrete coordinate and c is a
+    # continuous coordinate.
+    offset_x = rois[:, 0]
+    offset_y = rois[:, 1]
+
+    widths = rois[:, 2] - rois[:, 0]
+    heights = rois[:, 3] - rois[:, 1]
+    widths = widths.clamp(min=1)
+    heights = heights.clamp(min=1)
+    widths_ceil = widths.ceil()
+    heights_ceil = heights.ceil()
+
+    num_keypoints = maps.shape[1]
+    xy_preds = torch.zeros((len(rois), 3, num_keypoints), dtype=torch.float32, device=maps.device)
+    end_scores = torch.zeros((len(rois), num_keypoints), dtype=torch.float32, device=maps.device)
+    for i in range(len(rois)):
+        roi_map_width = int(widths_ceil[i].item())
+        roi_map_height = int(heights_ceil[i].item())
+        width_correction = widths[i] / roi_map_width
+        height_correction = heights[i] / roi_map_height
+        roi_map = torch.nn.functional.interpolate(
+            maps[i][None], size=(roi_map_height, roi_map_width), mode='bicubic', align_corners=False)[0]
+        # roi_map_probs = scores_to_probs(roi_map.copy())
+        w = roi_map.shape[2]
+        pos = roi_map.reshape(num_keypoints, -1).argmax(dim=1)
+        x_int = pos % w
+        y_int = (pos - x_int) // w
+        # assert (roi_map_probs[k, y_int, x_int] ==
+        #         roi_map_probs[k, :, :].max())
+        x = (x_int.float() + 0.5) * width_correction
+        y = (y_int.float() + 0.5) * height_correction
+        xy_preds[i, 0, :] = x + offset_x[i]
+        xy_preds[i, 1, :] = y + offset_y[i]
+        xy_preds[i, 2, :] = 1
+        end_scores[i, :] = roi_map[torch.arange(num_keypoints), y_int, x_int]
+
+    return xy_preds.permute(0, 2, 1), end_scores
+
+
+def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched_idxs):
+    N, K, H, W = keypoint_logits.shape
+    assert H == W
+    discretization_size = H
+    heatmaps = []
+    valid = []
+    for proposals_per_image, gt_kp_in_image, midx in zip(proposals, gt_keypoints, keypoint_matched_idxs):
+        kp = gt_kp_in_image[midx]
+        heatmaps_per_image, valid_per_image = keypoints_to_heatmap(
+            kp, proposals_per_image, discretization_size
+        )
+        heatmaps.append(heatmaps_per_image.view(-1))
+        valid.append(valid_per_image.view(-1))
+
+    keypoint_targets = torch.cat(heatmaps, dim=0)
+    valid = torch.cat(valid, dim=0).to(dtype=torch.uint8)
+    valid = torch.nonzero(valid).squeeze(1)
+
+    # torch.mean (in binary_cross_entropy_with_logits) does'nt
+    # accept empty tensors, so handle it sepaartely
+    if keypoint_targets.numel() == 0 or len(valid) == 0:
+        return keypoint_logits.sum() * 0
+
+    keypoint_logits = keypoint_logits.view(N * K, H * W)
+
+    keypoint_loss = F.cross_entropy(keypoint_logits[valid], keypoint_targets[valid])
+    return keypoint_loss
 
 
 def keypointrcnn_inference(x, boxes):
@@ -249,8 +361,34 @@ class RoIHeads(torch.nn.Module):
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.detections_per_img = detections_per_img
-        self.has_mask=False
-        self.has_keypoint=False
+
+        self.mask_roi_pool = mask_roi_pool
+        self.mask_head = mask_head
+        self.mask_predictor = mask_predictor
+
+        self.keypoint_roi_pool = keypoint_roi_pool
+        self.keypoint_head = keypoint_head
+        self.keypoint_predictor = keypoint_predictor
+
+    @property
+    def has_mask(self):
+        if self.mask_roi_pool is None:
+            return False
+        if self.mask_head is None:
+            return False
+        if self.mask_predictor is None:
+            return False
+        return True
+
+    @property
+    def has_keypoint(self):
+        if self.keypoint_roi_pool is None:
+            return False
+        if self.keypoint_head is None:
+            return False
+        if self.keypoint_predictor is None:
+            return False
+        return True
 
     def assign_targets_to_proposals(self, proposals, gt_boxes, gt_labels):
         matched_idxs = []
@@ -258,22 +396,19 @@ class RoIHeads(torch.nn.Module):
         for proposals_in_image, gt_boxes_in_image, gt_labels_in_image in zip(proposals, gt_boxes, gt_labels):
             match_quality_matrix = self.box_similarity(gt_boxes_in_image, proposals_in_image)
             matched_idxs_in_image = self.proposal_matcher(match_quality_matrix)
-
             clamped_matched_idxs_in_image = matched_idxs_in_image.clamp(min=0)
-
             labels_in_image = gt_labels_in_image[clamped_matched_idxs_in_image]
             labels_in_image = labels_in_image.to(dtype=torch.int64)
 
             # Label background (below the low threshold)
             bg_inds = matched_idxs_in_image == self.proposal_matcher.BELOW_LOW_THRESHOLD
             labels_in_image[bg_inds] = 0
-
             # Label ignore proposals (between low and high thresholds)
             ignore_inds = matched_idxs_in_image == self.proposal_matcher.BETWEEN_THRESHOLDS
             labels_in_image[ignore_inds] = -1  # -1 is ignored by sampler
-
             matched_idxs.append(clamped_matched_idxs_in_image)
             labels.append(labels_in_image)
+
         return matched_idxs, labels
 
     def subsample(self, labels):
@@ -304,14 +439,10 @@ class RoIHeads(torch.nn.Module):
 
     def select_training_samples(self, proposals, targets):
         self.check_targets(targets)
-        self.check_targets(targets)
-        assert targets is not None
-        #dtype = proposals[0].dtype
         gt_boxes = [t["boxes"] for t in targets]
         gt_labels = [t["labels"] for t in targets]
         # append ground-truth bboxes to propos
         proposals = self.add_gt_proposals(proposals, gt_boxes)
-
         # get matching gt indices for each proposal
         matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_boxes, gt_labels)
         # sample a fixed proportion of positive-negative proposals
@@ -328,85 +459,49 @@ class RoIHeads(torch.nn.Module):
         regression_targets = self.box_coder.encode(matched_gt_boxes, proposals)
         return proposals, matched_idxs, labels, regression_targets
 
-    # COVID-CT-Mask-Net input
-    # Alex:
-    # We need encoded boxes and their scores
-    # IMPORTANT! 
-    # Boxes are ranked in decreasing order (scores) - this is the input in S2 classification module
     def postprocess_detections(self, class_logits, box_regression, proposals, image_shapes):
         device = class_logits.device
-        # bgr, GGO, C
         num_classes = class_logits.shape[-1]
         boxes_per_image = [len(boxes_in_image) for boxes_in_image in proposals]
-        #1. Reshape the box regression into num_predictions x num_classes (3) x 4
-        res_boxes = box_regression.view(boxes_per_image[0], num_classes, -1)
         pred_boxes = self.box_coder.decode(box_regression, proposals)
         pred_scores = F.softmax(class_logits, -1)
-
         # split boxes and scores per image
         pred_boxes = pred_boxes.split(boxes_per_image, 0)
-        # 2. split reshaped boxes
-        res_boxes = res_boxes.split(boxes_per_image,0)
         pred_scores = pred_scores.split(boxes_per_image, 0)
 
         all_boxes = []
         all_scores = []
         all_labels = []
-        # 3. store reshaped boxes
-        all_res_boxes = []
-        all_roi_inds = []
-        for boxes, res_box, scores, image_shape in zip(pred_boxes, res_boxes, pred_scores, image_shapes):
+        for boxes, scores, image_shape in zip(pred_boxes, pred_scores, image_shapes):
             boxes = box_ops.clip_boxes_to_image(boxes, image_shape)
             # create labels for each prediction
             labels = torch.arange(num_classes, device=device)
             labels = labels.view(1, -1).expand_as(scores)
             # remove predictions with the background label
+            highest_scores = scores.argmax(dim=1)
             boxes = boxes[:, 1:]
             scores = scores[:, 1:]
             labels = labels[:, 1:]
-            # 4. Do the same with unencoded boxes
-            res_box = res_box[:,1:]
-
             # batch everything, by making every class prediction be a separate instance
             boxes = boxes.reshape(-1, 4)
             scores = scores.flatten()
             labels = labels.flatten()
-            # 5. Do the same with the unencoded boxes
-            res_box = res_box.reshape(-1,4)
-            # Alex
-            # remove empty boxes
             area = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:,1])
-            inds_area = torch.nonzero(area>0).squeeze(1)
-            boxes, scores, labels, res_box = boxes[inds_area], scores[inds_area], labels[inds_area], res_box[inds_area]
+            inds_large = torch.nonzero(area>0).squeeze(1)
+            boxes, scores, labels = boxes[inds_large], scores[inds_large], labels[inds_large]
             # remove low scoring boxes
             inds = torch.nonzero(scores > self.score_thresh).squeeze(1)
-            boxes, scores, labels, res_box = boxes[inds], scores[inds], labels[inds], res_box[inds]
-            # Since we have 2 predictions/RoI, need to match the final indices to the corresponding RoI (floor(div(2))
-            roi_inds = torch.arange(labels.size()[0]).div_(2).to(device)
+
+            boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
             # non-maximum suppression, independently done per class
             keep = box_ops.batched_nms(boxes, scores, labels, self.nms_thresh)
             # keep only topk scoring predictions
             keep = keep[:self.detections_per_img]
-            # Alex: keep is a vector, keep.ndimension()==1
-            # if fewer than the RoI batch size, augment and keep the order!
-            if keep.size().numel()<self.detections_per_img:
-               keep_aug = torch.zeros(self.detections_per_img, dtype=torch.long)
-               # get the indices to fill in with the values from the keep vector, make sure 0 is the first value, and add the last index=RoI batch size
-               inds_rand = torch.cat((torch.tensor([0]), torch.randperm(self.detections_per_img-2)[:keep.size().numel()-1].sort().values+1, torch.tensor([self.detections_per_img])),0).unique()
-               for idxs, posts in enumerate(inds_rand[:-1]):
-                   keep_aug[posts:inds_rand[idxs+1]] = keep[idxs].expand(inds_rand[idxs+1]-posts)
-               keep=keep_aug
-
-            # 6. Do the same with the uncencoded boxes
-            boxes, scores, labels, res_box, roi_inds = boxes[keep], scores[keep], labels[keep], res_box[keep], roi_inds[keep]
+            boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
             all_boxes.append(boxes)
             all_scores.append(scores)
             all_labels.append(labels)
-            all_res_boxes.append(res_box)
-            all_roi_inds.append(roi_inds)
-
-        # 7. Return the highest-scorin unencoded boxes
-        return all_boxes, all_scores, all_labels, all_res_boxes, all_roi_inds
+        return all_boxes, all_scores, all_labels
 
     def forward(self, features, proposals, image_shapes, targets=None):
         """
@@ -420,35 +515,26 @@ class RoIHeads(torch.nn.Module):
             proposals, matched_idxs, labels, regression_targets = self.select_training_samples(proposals, targets)
 
         box_features = self.box_roi_pool(features, proposals, image_shapes)
-        # Alex: return local features
-        box_features_out = [box_features.clone()]
         box_features = self.box_head(box_features)
         class_logits, box_regression = self.box_predictor(box_features)
         result, losses = [], {}
         if self.training:
-            loss_classifier, loss_box_reg = fastrcnn_loss(
+            loss_classifier, loss_box_reg, unique_labels = fastrcnn_loss(
                 class_logits, box_regression, labels, regression_targets)
             losses = dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg)
         else:
-            # Alex: add the unencoded boxes and indices of RoIs to use in the training
-            boxes, scores, labels, res_boxes, roi_inds  = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes)
+            boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes)
             num_images = len(boxes)
-            # Alex: concatenate scores and boxes
+            unique_labels = labels[0].unique(return_counts=True)
             for i in range(num_images):
-                ranked_boxes = torch.cat([scores[i].view(-1,1),res_boxes[i]], dim=1)
-                selected_rois = box_features_out[i][roi_inds]
                 result.append(
                     dict(
-                        ranked_boxes=ranked_boxes,
                         boxes=boxes[i],
                         labels=labels[i],
                         scores=scores[i],
-                        rois = selected_rois
                     )
                 )
 
-        # Alex:
-        # no mask, only Faster R-CNN interface
         if self.has_mask:
             mask_proposals = [p["boxes"] for p in result]
             if self.training:
@@ -460,15 +546,54 @@ class RoIHeads(torch.nn.Module):
                     pos = torch.nonzero(labels[img_id] > 0).squeeze(1)
                     mask_proposals.append(proposals[img_id][pos])
                     pos_matched_idxs.append(matched_idxs[img_id][pos])
-            # Mask feature extraction: takes processed boxes in case of detection 
+
             mask_features = self.mask_roi_pool(features, mask_proposals, image_shapes)
             mask_features = self.mask_head(mask_features)
-            result[0]["mask_features"]=mask_features
-            #mask_logits = self.mask_predictor(mask_features)
+            mask_logits = self.mask_predictor(mask_features)
+            loss_mask = {}
+            if self.training:
+                gt_masks = [t["masks"] for t in targets]
+                gt_labels = [t["labels"] for t in targets]
+                loss_mask = maskrcnn_loss(
+                    mask_logits, mask_proposals,
+                    gt_masks, gt_labels, pos_matched_idxs)
+                loss_mask = dict(loss_mask=loss_mask)
+            else:
+                labels = [r["labels"] for r in result]
+                masks_probs = maskrcnn_inference(mask_logits, labels)
+                for mask_prob, r in zip(masks_probs, result):
+                    r["masks"] = mask_prob
 
-        # 'res_boxes'
-        # 'boxes':
-        # 'rois'
-        # Alex: decoded boxes, mask logits, encoded boxes and RoIs are sorted in the decreasing order of their scores,
-        # No need to return scores and labels 
-        return result
+            losses.update(loss_mask)
+
+        if self.has_keypoint:
+            keypoint_proposals = [p["boxes"] for p in result]
+            if self.training:
+                # during training, only focus on positive boxes
+                num_images = len(proposals)
+                keypoint_proposals = []
+                pos_matched_idxs = []
+                for img_id in range(num_images):
+                    pos = torch.nonzero(labels[img_id] > 0).squeeze(1)
+                    keypoint_proposals.append(proposals[img_id][pos])
+                    pos_matched_idxs.append(matched_idxs[img_id][pos])
+
+            keypoint_features = self.keypoint_roi_pool(features, keypoint_proposals, image_shapes)
+            keypoint_features = self.keypoint_head(keypoint_features)
+            keypoint_logits = self.keypoint_predictor(keypoint_features)
+
+            loss_keypoint = {}
+            if self.training:
+                gt_keypoints = [t["keypoints"] for t in targets]
+                loss_keypoint = keypointrcnn_loss(
+                    keypoint_logits, keypoint_proposals,
+                    gt_keypoints, pos_matched_idxs)
+                loss_keypoint = dict(loss_keypoint=loss_keypoint)
+            else:
+                keypoints_probs, kp_scores = keypointrcnn_inference(keypoint_logits, keypoint_proposals)
+                for keypoint_prob, kps, r in zip(keypoints_probs, kp_scores, result):
+                    r["keypoints"] = keypoint_prob
+                    r["keypoints_scores"] = kps
+
+            losses.update(loss_keypoint)
+        return result, losses

@@ -1,6 +1,9 @@
-# COVID Mask R-CNN project
-# You must have Torchvision v0.3.0+
-#
+
+# Mask R-CNN model for lesion segmentation in chest CT scans
+# Torchvision detection package is locally re-implemented
+# by Alex Ter-Sarkisov@City, University of London
+# alex.ter-sarkisov@city.ac.uk
+# 2020
 import argparse
 import time
 import pickle
@@ -10,10 +13,10 @@ import torchvision
 import numpy as np
 import os
 import cv2
-from torchvision.models.detection.rpn import AnchorGenerator
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, TwoMLPHead
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from torchvision.ops import MultiScaleRoIAlign
+import models.mask_net as mask_net
+from models.mask_net.rpn_segmentation import AnchorGenerator
+from models.mask_net.faster_rcnn import FastRCNNPredictor, TwoMLPHead
+from models.mask_net.covid_mask_net import MaskRCNNHeads, MaskRCNNPredictor
 from torchvision import transforms
 from torch.utils import data
 import torch.utils as utils
@@ -30,17 +33,22 @@ import config_segmentation as config
 def main(config, step):
     devices = ['cpu', 'cuda']
     mask_classes = ['both', 'ggo', 'merge']
-    assert config.mask_type in mask_classes
+    backbones = ['resnet50', 'resnet34', 'resnet18']
+    truncation_levels = ['0','1','2']
     assert config.device in devices
+    assert config.backbone_name in backbones
+    assert config.truncation in truncation_levels
+
+    assert config.mask_type in mask_classes
     if config.device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    #
     # get the configuration
-    confidence_threshold, mask_threshold, save_dir, data_dir, imgs_dir, mask_type, rpn_nms, roi_nms  = \
-        config.confidence_th, config.mask_logits_th, config.save_dir, config.test_data_dir, config.test_imgs_dir, \
-        config.mask_type, config.rpn_nms_th, config.roi_nms_th
+    # get the thresholds
+    confidence_threshold, mask_threshold, save_dir, data_dir, img_dir, gt_dir, mask_type, rpn_nms, roi_nms, backbone_name, truncation \
+        = config.confidence_th, config.mask_logits_th, config.save_dir, config.test_data_dir, config.test_imgs_dir, \
+        config.gt_dir, config.mask_type, config.rpn_nms_th, config.roi_nms_th, config.backbone_name, config.truncation
 
     if mask_type == "both":
         n_c = 3
@@ -51,30 +59,32 @@ def main(config, step):
     model_name = None
     if 'model_name' in ckpt.keys():
         model_name = ckpt['model_name']
-    ###############################################################################################
-    # MASK R-CNN model
-    # Alex: these settings could also be added to the config
-    maskrcnn_args = {'min_size': 512, 'max_size': 1024, 'box_nms_thresh': roi_nms, 'rpn_nms_thresh': rpn_nms, 'num_classes':None}
-    # Alex: for Ground glass opacity and consolidatin segmentation
     sizes = ckpt['anchor_generator'].sizes
     aspect_ratios = ckpt['anchor_generator'].aspect_ratios
     anchor_generator = AnchorGenerator(sizes, aspect_ratios)
-    print("Anchors: ", anchor_generator)
-    # num_classes:3 (1+2)
-    box_head_input_size = 256 * 7 * 7
-    box_head = TwoMLPHead(in_channels=box_head_input_size, representation_size=128)
-    box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
-    mask_roi_pool = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0, 1, 2, 3], output_size=14, sampling_ratio=2)
-    mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
+    print("Anchors: ", anchor_generator.sizes, anchor_generator.aspect_ratios)
 
-    maskrcnn_args['rpn_anchor_generator'] = anchor_generator
-    maskrcnn_args['mask_roi_pool'] = mask_roi_pool
-    maskrcnn_args['mask_predictor'] = mask_predictor
-    maskrcnn_args['box_predictor'] = box_predictor
-    maskrcnn_args['box_head'] = box_head
+    # create modules
+    # this assumes FPN with 256 channels
+    box_head = TwoMLPHead(in_channels=7 * 7 * 256, representation_size=128)
+    if backbone_name == 'resnet50':
+       maskrcnn_heads = None
+       box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
+       mask_predictor = MaskRCNNPredictor(in_channels=256, dim_reduced=256, num_classes=n_c)
+    else:
+       #Backbone->FPN->boxhead->boxpredictor
+       box_predictor = FastRCNNPredictor(in_channels=128, num_classes=n_c)
+       maskrcnn_heads = MaskRCNNHeads(in_channels=256, layers=(128,), dilation=1)
+       mask_predictor = MaskRCNNPredictor(in_channels=128, dim_reduced=128, num_classes=n_c)
+
+    # keyword arguments
+    maskrcnn_args = {'num_classes': None, 'min_size': 512, 'max_size': 1024, 'box_detections_per_img': 100,
+                     'box_nms_thresh': roi_nms, 'box_score_thresh': confidence_threshold, 'rpn_nms_thresh': rpn_nms,
+                     'box_head': box_head, 'rpn_anchor_generator': anchor_generator, 'mask_head':maskrcnn_heads,
+                     'mask_predictor': mask_predictor, 'box_predictor': box_predictor}
+
     # Instantiate the segmentation model
-    maskrcnn_model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=False,
-                                                                        progress=True, **maskrcnn_args)
+    maskrcnn_model = mask_net.maskrcnn_resnet_fpn(backbone_name, truncation, pretrained_backbone=False, **maskrcnn_args)
     # Load weights
     maskrcnn_model.load_state_dict(ckpt['model_weights'])
     # Set to evaluation mode
@@ -104,9 +114,9 @@ def main(config, step):
         model_name = config.model_name
 
     # run the inference with provided hyperparameters
-    test_ims = os.listdir(os.path.join(data_dir, imgs_dir))
+    test_ims = os.listdir(os.path.join(data_dir, img_dir))
     for j, ims in enumerate(test_ims):
-        step(os.path.join(os.path.join(data_dir, imgs_dir), ims), device, maskrcnn_model, model_name,
+        step(os.path.join(os.path.join(data_dir, img_dir), ims), device, maskrcnn_model, model_name,
              confidence_threshold, mask_threshold, save_dir, ct_classes, ct_colors, j)
     end_time = time.time()
     print("Inference took {0:.1f} seconds".format(end_time - start_time))
@@ -141,6 +151,7 @@ def test_step(image, device, model, model_name, theta_conf, theta_mask, save_dir
         best_bboxes = bboxes[best_idx]
         best_classes = classes[best_idx]
         best_masks = mask[best_idx]
+        print('bm', best_masks.shape)
         mask_array = np.zeros([best_masks[0].shape[1], best_masks[0].shape[2], 3], dtype=np.uint8)
         fig, ax = plt.subplots(1, 1)
         fig.set_size_inches(12, 6)

@@ -115,12 +115,13 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None):
+                 norm_layer=None, truncation=None, **kwargs):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
-
+        # Alex: truncation argument
+        self.truncation = truncation
         self.inplanes = 64
         self.dilation = 1
         if replace_stride_with_dilation is None:
@@ -154,6 +155,13 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
+        # Alex: add the variable to return the size of the last layer in the truncated model:
+        if self.truncation == '0':
+           self.out_channels = self.layer4[-1].bn2.num_features
+        elif self.truncation == '1':
+           self.out_channels = self.layer3[-1].bn2.num_features
+        elif self.truncation == '2':
+           self.out_channels = self.layer2[-1].bn2.num_features
         # Zero-initialize the last BN in each residual branch,
         # so that the residual branch starts with zeros, and each residual block behaves like an identity.
         # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677

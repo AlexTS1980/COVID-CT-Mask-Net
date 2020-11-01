@@ -11,6 +11,8 @@ def get_config_pars(stage):
         description='arguments for training Mask R-CNN segmentation for 2 classes '
                     '(Ground Glass Opacity and Consolidation) on CNCB dataset')
 
+    parser_.add_argument("--backbone_name", type=str, default='resnet50', help="One of resnet50, resnet34, reesnet18")
+    parser_.add_argument("--truncation", type=str, default="0", help="One of 0,1,2 for no truncation, last block, two last blocks")
     parser_.add_argument("--device", type=str, default='cpu')
     parser_.add_argument("--model_name", type=str, default=None)
     parser_.add_argument("--rpn_nms_th", type=float, default=0.75, help="Both at train and test stages.")
@@ -22,13 +24,12 @@ def get_config_pars(stage):
 
     if stage == "trainval":
         parser_.add_argument("--start_epoch", type=str, default=0)
-        parser_.add_argument("--model", type=str, help="Pretrained model, must be a checkpoint with keys: "
+        parser_.add_argument("--pretrained_model", type=str, help="Pretrained model, must be a checkpoint with keys:"
                                                        "model_weights, anchor_generator, optimizer_state, model_name",
                              default=None)
         parser_.add_argument("--num_epochs", type=int, default=50)
-        parser_.add_argument("--use_pretrained_model", type=utils.str_to_bool, default=False)
         parser_.add_argument("--use_pretrained_resnet_backbone", type=utils.str_to_bool, default=False,
-                             help="Use the ResNet50w/FPN weights from Torchvision repository")
+                             help="Use the ResNetw/FPN weights from Torchvision repository")
         parser_.add_argument("--save_dir", type=str, default="saved_models",
                              help="Directory to save checkpoints")
         parser_.add_argument("--train_data_dir", type=str, default='../covid_data/train',
@@ -52,7 +53,7 @@ def get_config_pars(stage):
                                                                                "Must be in the test data directory.")
         parser_.add_argument("--save_dir", type=str, default='eval_imgs',
                              help="Directory to save segmentation results.")
-        parser_.add_argument("--confidence_th", type=float, default=0.75, help="Lower confidence score threshold on "
+        parser_.add_argument("--confidence_th", type=float, default=0.05, help="Lower confidence score threshold on "
                                                                                "positive prediction from RoI.")
         parser_.add_argument("--mask_logits_th", type=float, default=0.5, help="Lower threshold for positve mask "
                                                                                "prediction at "
@@ -60,6 +61,6 @@ def get_config_pars(stage):
         parser_.add_argument("--gt_dir", type=str, default='masks',
                              help="Path to directory with binary masks. Must be in the data directory. If the stage == "
                                   "'precision', this path must be provided.")
-        parser_.add_argument("--roi_nms_th", type=float, default=0.75, help="Only at test stage.")
+        parser_.add_argument("--roi_nms_th", type=float, default=0.5, help="Only at test stage.")
     model_args = parser_.parse_args()
     return model_args

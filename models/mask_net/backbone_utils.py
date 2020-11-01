@@ -33,30 +33,44 @@ class BackboneWithFPN(nn.Sequential):
         fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
-            extra_blocks=LastLevelMaxPool(),
+            # Alex: delete the additional block
+            # FPN outputs a single layer
+            #extra_blocks=LastLevelMaxPool(),
         )
         super(BackboneWithFPN, self).__init__(OrderedDict(
             [("body", body), ("fpn", fpn)]))
         self.out_channels = out_channels
 
 
-def resnet_fpn_backbone(backbone_name, pretrained, out_ch):
+def resnet_fpn_backbone(backbone_name, pretrained, out_ch, truncation):
+
+    
     backbone = resnet.__dict__[backbone_name](
         pretrained=pretrained,
-        norm_layer=nn.BatchNorm2d)
-    # freeze layers
-    for name, parameter in backbone.named_parameters():
-        if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
-            parameter.requires_grad_(False)
+        norm_layer=nn.BatchNorm2d, truncation=truncation)
+    # Alex: the orginial implementation uses 4 outputs from the backbone
+    # to replicate the best results in the paper, use resnet18 or resnet34
+    # and truncation=1 or resnet50 and truncation=0 for the large model
+    if backbone_name == 'resnet50':
+       return_layers = {'layer1': 0, 'layer2': 1, 'layer3': 2, 'layer4': 3}
+       in_channels_stage2 = 256
+       in_channels_list = [
+          in_channels_stage2,
+          in_channels_stage2 * 2,
+          in_channels_stage2 * 4,
+          in_channels_stage2 * 8,
+      ]
 
-    return_layers = {'layer1': 0, 'layer2': 1, 'layer3': 2, 'layer4': 3}
+    elif backbone_name == 'resnet18' or backbone_name == 'resnet34':
+       if truncation == '0':
+          return_layers = {'layer4':0}
+       elif truncation == '1':
+          return_layers = {'layer3':0}
+       elif truncation == '2':
+          return_layers = {'layer2':0}
+       # Alex: I added the feature that returns the number of channels from the last layer in the net
+       in_channels_list = [backbone.out_channels]
 
-    in_channels_stage2 = 256
-    in_channels_list = [
-        in_channels_stage2,
-        in_channels_stage2 * 2,
-        in_channels_stage2 * 4,
-        in_channels_stage2 * 8,
-    ]
+    # These should be 256
     out_channels = out_ch
     return BackboneWithFPN(backbone, return_layers, in_channels_list, out_channels)

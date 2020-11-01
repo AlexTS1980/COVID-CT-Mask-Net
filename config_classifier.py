@@ -10,13 +10,13 @@ def get_config_pars_classifier(stage):
 
     parser_.add_argument("--device", type=str, default='cpu')
     parser_.add_argument("--model_name", type=str, default=None)
-    parser_.add_argument("--mask_type", type=str, default=None, help="currently accepts three types: both "
-                                                                     "for 2 classes, GGO and C, ggo for only "
-                                                                     "GGO mask, and merge for merged GGO and C "
-                                                                     "classes. These inputs are used both in the "
-                                                                     "dataset and model interfaces.")
-    parser_.add_argument("--rpn_nms_th", type=float, default=0.75, help="Both at train and test stages.")
-    parser_.add_argument("--roi_nms_th", type=float, default=0.75, help="Both at train and test stages..")
+    parser_.add_argument("--num_classes", type=int, default=None, help="This refers to the number of classes in the segmentation mode, so either 2 or 3")
+    parser_.add_argument("--rpn_nms_th", type=float, default=0.75, help="Both at train and test stages")
+    parser_.add_argument("--roi_nms_th", type=float, default=0.75, help="Both at train and test stages")
+    parser_.add_argument("--backbone_name", type=str, default='resnet50', help="One of resnet50, resnet34, reesnet18")
+    parser_.add_argument("--truncation", type=str, default="0", help="One of 0,1,2 for no truncation, last block, two last blocks")
+    parser_.add_argument("--roi_batch_size", type=int, default=256, help="RoI batch size output, input in the S classifier module")
+    parser_.add_argument("--s_features", type=int, default=None, help="Number of features in the S classification module")
 
     if stage == "trainval":
         parser_.add_argument("--start_epoch", type=str, default=0)

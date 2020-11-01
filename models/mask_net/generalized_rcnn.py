@@ -20,7 +20,8 @@ class GeneralizedRCNN(nn.Module):
         transform (nn.Module): performs the data transformation from the inputs to feed into
             the model
     """
-    # s2: boxes
+    # Alex: 
+    # s2: classification module S
     def __init__(self, backbone, rpn, roi_heads, transform, s2):
         super(GeneralizedRCNN, self).__init__()
         self.transform = transform
@@ -47,14 +48,25 @@ class GeneralizedRCNN(nn.Module):
         original_image_sizes = [img.shape[-2:] for img in images]
         images, targets = self.transform(images, targets)
         features = self.backbone(images.tensors)
-        if isinstance(features, torch.Tensor):
-            features = OrderedDict([(0, features)])
+        # Alex
+        # Segmentation step is the same as in torchvision
+        if self.model_type=="segmentation":
+           proposals, proposal_losses = self.rpn(images, features, targets)
+           detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+           detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
 
-        proposals= self.rpn(images, features, targets)
-        # Alex: RoI layer returns only detections
-        detections = self.roi_heads(features, proposals, images.image_sizes, targets)
-        # No need to postprocess detections
-        scores_covid_boxes = self.s2new(detections[0]['ranked_boxes'])
-        # Alex: update losses with predictions from each module
-        scores_covid_img = [dict(final_scores=scores_covid_boxes.squeeze_(0))]
-        return scores_covid_img
+           losses = {}
+           losses.update(detector_losses)
+           losses.update(proposal_losses)
+
+           if self.training:
+              return losses
+
+           return detections
+        # Classification: compute only the loss in the S module
+        else:
+           proposals = self.rpn(images, features, targets)
+           detections = self.roi_heads(features, proposals, images.image_sizes, targets)
+           scores_covid_boxes = self.s2new(detections[0]['ranked_boxes'])
+           scores_covid_img = [dict(final_scores=scores_covid_boxes.squeeze_(0))]
+           return scores_covid_img

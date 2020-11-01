@@ -15,11 +15,12 @@ from .backbone_utils import resnet_fpn_backbone
 from .faster_rcnn import FasterRCNN
 
 __all__ = [
-    "COVIDMaskNet", "maskrcnn_resnet50_fpn",
+    "COVIDMaskNet", "maskrcnn_resnet_fpn",
 ]
 
 # Alex:
 # I renamed Mask R-CNN to COVIDMaskNet, hope this doesn't violate any licenses/copyrights, etc
+# 29-10: this will work only for the segmentation model, for the COVID-CT-Mask-Net classifier, use FasteRCNN interface
 class COVIDMaskNet(FasterRCNN):
     """
     Implements Mask R-CNN.
@@ -195,7 +196,6 @@ class COVIDMaskNet(FasterRCNN):
             mask_dim_reduced = 256
             mask_predictor = MaskRCNNPredictor(mask_predictor_in_channels,
                                                mask_dim_reduced, num_classes)
-
         super(COVIDMaskNet, self).__init__(
             backbone, num_classes,
             # transform parameters
@@ -213,7 +213,7 @@ class COVIDMaskNet(FasterRCNN):
             box_score_thresh, box_nms_thresh, box_detections_per_img,
             box_fg_iou_thresh, box_bg_iou_thresh,
             box_batch_size_per_image, box_positive_fraction,
-            bbox_reg_weights)
+            bbox_reg_weights, model_type='segmentation')
 
         self.roi_heads.mask_roi_pool = mask_roi_pool
         self.roi_heads.mask_head = mask_head
@@ -258,15 +258,10 @@ class MaskRCNNPredictor(nn.Sequential):
             # elif "bias" in name:
             #     nn.init.constant_(param, 0)
 
-model_urls = {
-    'maskrcnn_resnet50_fpn_coco':
-        'https://download.pytorch.org/models/maskrcnn_resnet50_fpn_coco-bf2d0c1e.pth',
-}
-
-
-
-def maskrcnn_resnet50_fpn(pretrained=False, progress=True,
-                          num_classes=91, pretrained_backbone=True, **kwargs):
+# Alex:
+# backbone_name: resnet50, resnet34, resnet18
+# truncation: 0, 1, 2
+def maskrcnn_resnet_fpn(backbone_name, truncation, num_classes=91, pretrained_backbone=True, **kwargs):
     """
     Constructs a Mask R-CNN model with a ResNet-50-FPN backbone.
 
@@ -307,13 +302,6 @@ def maskrcnn_resnet50_fpn(pretrained=False, progress=True,
         pretrained (bool): If True, returns a model pre-trained on COCO train2017
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    if pretrained:
-        # no need to download the backbone if pretrained is set
-        pretrained_backbone = False
-    backbone = resnet_fpn_backbone('resnet50', pretrained_backbone, out_ch=256)
+    backbone = resnet_fpn_backbone(backbone_name, pretrained_backbone, out_ch=256, truncation=truncation)
     model = COVIDMaskNet(backbone, num_classes, **kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls['maskrcnn_resnet50_fpn_coco'],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
     return model
