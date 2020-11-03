@@ -34,10 +34,10 @@ I re-implemented torchvision's segmentation interface locally, in the end it was
 
 |  Model	| AP@0.5 	| AP@0.75 	| mAP@[0.5:0.95:0.05] 	| Model size
 |:-:	|:-:	|:-:	|:-:|:-:	
-| **Lightweight model (truncated ResNet34+FPN)** 	| 67.16% 	| 42.97% 	| 45.01% 	| 11.45M|
-| **Lightweight model (truncated ResNet18+FPN)** 	| 63.20% 	| 37.29% 	| 42.71% 	|6.12M|
-| **Full model (merged masks)** 	| 70.93% 	| 44.26% 	| 46.46% 	|31.78M|
-| **Full model (GGO + C masks)**        |  50.74%| 29.92%|34.06%|31.78M|
+| **Lightweight model (truncated ResNet34+FPN)** 	| 59.88% 	| 45.06% 	| 44.76% 	| 11.45M|
+| **Lightweight model (truncated ResNet18+FPN)** 	| 49.95% 	| 37.78% 	| 39.32% 	|6.12M|
+| **Full model (merged masks)** 	| 61.92% 	| 45.22% 	| 44.68% 	|31.78M|
+| **Full model (GGO + C masks)**        |  50.20%| 41.98%|38.71%|31.78M|
 
 The penultimate column is the mean over 10 IoU thresholds, the main metric in the MS COCO leaderboard. 
 
