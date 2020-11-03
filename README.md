@@ -45,7 +45,7 @@ For each script, two additional arguments were added: `backbone_name`, one of `r
 
 To evaluate the model, run (e.g., for the lightweight with ResNet18+FPN backbone and truncated last block: 
 ```
-python3 evaluation_mean_ap.py --backbone_name resnet18 --ckpt model.pth --mask_type merge --truncation 1 --rpn_nms_th 0.75 --roi_nms_th 0.5 --confidence_th 0.05 
+python3 evaluation_mean_ap.py --backbone_name resnet18 --ckpt model.pth --mask_type merge --truncation 1 --rpn_nms_th 0.75 --roi_nms_th 0.75 --confidence_th 0.75 
 ```
 To train the segmentation model from scratch to get the results above:
 ```
