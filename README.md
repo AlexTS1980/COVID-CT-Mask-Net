@@ -15,7 +15,6 @@ Bibtex citation ref:
 	author = {Ter-Sarkisov, Aram},
 	title = {Lightweight Model For The Prediction of COVID-19 Through The Detection And Segmentation
 	of Lesions in Chest CT Scans},
-	elocation-id = {2020.10.30.20223586},
 	year = {2020},
 	doi = {10.1101/2020.10.30.20223586},
 	publisher = {Cold Spring Harbor Laboratory Press},
@@ -25,7 +24,6 @@ Bibtex citation ref:
 @article {Ter-Sarkisov2020.10.23.20218461,
 	author = {Ter-Sarkisov, Aram},
 	title = {Detection and Segmentation of Lesion Areas in Chest CT Scans For The Prediction of COVID-19},
-	elocation-id = {2020.10.23.20218461},
 	year = {2020},
 	doi = {10.1101/2020.10.23.20218461},
 	publisher = {Cold Spring Harbor Laboratory Press},
