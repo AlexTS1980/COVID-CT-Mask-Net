@@ -13,7 +13,7 @@ Bibtex citation ref:
 ```
 @article {Ter-Sarkisov2020.10.30.20223586,
 	author = {Ter-Sarkisov, Aram},
-	title = {Lightweight Model For The Prediction of COVID-19 Through The Detection And Segmentation of Lesions in Chest CT Scans},
+	title = {Lightweight Model For The Prediction of COVID-19 Through The Detection And Segmentation\\ of Lesions in Chest CT Scans},
 	elocation-id = {2020.10.30.20223586},
 	year = {2020},
 	doi = {10.1101/2020.10.30.20223586},
