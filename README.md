@@ -1,5 +1,11 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
+[Presentation](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/presentations/COVID_19_Presentation_Kent.pdf) at the University of Kent, 23-11-2020:
+
+<p align="center">
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/Kent_231120.png" width="800" height="400" align="center"/>
+</p>
+
 Papers on medrXiv: 
 
 [Lightweight Model For The Prediction of COVID-19 Through The Detection And Segmentation of Lesions in Chest CT Scans](https://www.medrxiv.org/content/10.1101/2020.10.30.20223586v2.full.pdf)
