@@ -158,12 +158,12 @@ To get the reported results, and for the COVID-CT-Mask-Net classsifier, we train
 ### 2.1 Full model (ResNet50+FPN backbone)
 **The model**
 <p align="center">
-<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid_ct_mask_net.png" width="800" height="300" align="center"/>
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/covid-ct-mask-net.png" width="800" height="300" align="center"/>
 </p>
 
 **Classification module *S***
 <p align="center">
-<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/s_module.png" width="300" height="200" align="center"/>
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/s_module_final.png" width="300" height="200" align="center"/>
 </p>
 
 I reimplemented torchvision's detection library(https://github.com/pytorch/vision/tree/master/torchvision/models/detection) in `/models/mask_net/` with the classification module **s2_new** (**S** in the paper) and other hacks that convert Mask R-CNN into a classification model.
