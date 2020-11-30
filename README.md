@@ -105,7 +105,7 @@ I added a large number of updates across all models. Now you can train segmentat
 
 I added methods in the `utils` script to compute the accuracy (mean Average Precision) of Mask R-CNN segmentation models. They are based on matterport's package, but purely in pytorch, no requirements for RLE or pycocotools. A new evaluation script, `evaluation_mean_ap`, which uses these methods for a range of Intersect over Union (IoU) thresholds, has been added too. 
 
-**COVID-CT-Mask-Net (merged masks)**: COVID-19 sensitivity: 93.55%, overall accuracy: 96.33%
+**COVID-CT-Mask-Net (merged masks)**: COVID-19 sensitivity: 92.68%, overall accuracy: 96.33%
 |  	| Control 	| CP 	| COVID-19 	|
 |:-:	|:-:	|:-:	|:-:	|
 | **Control** 	| 9236 	| 188 	| 26 	|
