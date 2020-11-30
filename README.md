@@ -1,5 +1,11 @@
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
+[Presentation](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/presentations/COVID_19_Presentation_Kent.pdf) at the University of Kent, 23-11-2020:
+
+<p align="center">
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/Kent_231120.png" width="800" height="400" align="center"/>
+</p>
+
 Papers on medrXiv: 
 
 [Lightweight Model For The Prediction of COVID-19 Through The Detection And Segmentation of Lesions in Chest CT Scans](https://www.medrxiv.org/content/10.1101/2020.10.30.20223586v2.full.pdf)
@@ -99,7 +105,7 @@ I added a large number of updates across all models. Now you can train segmentat
 
 I added methods in the `utils` script to compute the accuracy (mean Average Precision) of Mask R-CNN segmentation models. They are based on matterport's package, but purely in pytorch, no requirements for RLE or pycocotools. A new evaluation script, `evaluation_mean_ap`, which uses these methods for a range of Intersect over Union (IoU) thresholds, has been added too. 
 
-**COVID-CT-Mask-Net (merged masks)**: COVID-19 sensitivity: 93.55%, overall accuracy: 96.33%
+**COVID-CT-Mask-Net (merged masks)**: COVID-19 sensitivity: 92.68%, overall accuracy: 96.33%
 |  	| Control 	| CP 	| COVID-19 	|
 |:-:	|:-:	|:-:	|:-:	|
 | **Control** 	| 9236 	| 188 	| 26 	|
