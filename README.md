@@ -197,4 +197,4 @@ There are two groups of hyperparameters: training (learning rate, weight regular
 
 [Update 22/10/20:] Also, our re-implementation of torchvision's Mask R-CNN has a hack that allows maintaining the same batch size regardless of the pre-set `box_score_thresh`. 
 
-For any questions, contact Alex Ter-Sarkisov: (alex.ter-sarkisov@city.ac.uk)
+For any questions, contact Alex Ter-Sarkisov: alex.ter-sarkisov@city.ac.uk
