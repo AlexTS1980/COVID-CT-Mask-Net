@@ -175,7 +175,7 @@ I implemented two backbones, ResNet18 and ResNet34, both with a single FPN modul
 
 Backbone model:
 <p align="center">
-<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/resnet18.png" width="600" height="150" align="center"/>
+<img src="https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/plots/resnet18.png" width="800" height="250" align="center"/>
 </p>
 
 Here's the full size comparison:
