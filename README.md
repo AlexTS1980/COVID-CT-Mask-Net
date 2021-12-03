@@ -1,3 +1,5 @@
+## Update from 21/11/21: to appear in Applied Intelligence
+
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
 [Presentation](https://github.com/AlexTS1980/COVID-CT-Mask-Net/blob/master/presentations/COVID_19_Presentation_Kent.pdf) at the University of Kent, 23-11-2020:
