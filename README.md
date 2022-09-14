@@ -49,6 +49,8 @@ Bibtex citation (preprints):
 	journal = {medRxiv}
 }}
 ```
+Bibtex citation (journal publication)
+```
 @article {TerSarkisov2022,
 	author = {Ter-Sarkisov, Aram},
 	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
@@ -57,7 +59,7 @@ Bibtex citation (preprints):
 	journal = {Applied Intelligence}
 	volume = {52}
 	pages = {9664–9675}}
-
+```
 
 ## Update 01/11/20
 I re-implemented torchvision's segmentation interface locally, in the end it was easier to keep two different files for RPN and RoI for segmentation and classification tasks: `rpn_segmentation, roi_segmentation` vs `roi` and `rpn`. For the validation split in `test_split_segmentation.txt` I get the following results for the two lightweight and two best full models (ResNet50+FPN backbone): 
