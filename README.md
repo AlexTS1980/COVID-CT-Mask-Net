@@ -49,7 +49,7 @@ Bibtex citation (preprints):
 	journal = {medRxiv}
 }}
 ```
-Bibtex citation (journal publication)
+Bibtex citation (journal publication):
 ```
 @article {TerSarkisov2022,
 	author = {Ter-Sarkisov, Aram},
