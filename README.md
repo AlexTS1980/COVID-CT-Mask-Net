@@ -18,7 +18,7 @@ Papers on medrXiv:
 
 [COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features](https://www.medrxiv.org/content/10.1101/2020.10.11.20211052v2.full.pdf)
 
-Bibtex citation ref: 
+Bibtex citation (preprints): 
 
 ```
 
@@ -49,6 +49,15 @@ Bibtex citation ref:
 	journal = {medRxiv}
 }}
 ```
+@article {TerSarkisov2022,
+	author = {Ter-Sarkisov, Aram},
+	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
+	year = {2022},
+	doi = {10.1007/s10489-021-02731-6},
+	journal = {Applied Intelligence}
+	volume = {52}
+	pages = {9664–9675}}
+
 
 ## Update 01/11/20
 I re-implemented torchvision's segmentation interface locally, in the end it was easier to keep two different files for RPN and RoI for segmentation and classification tasks: `rpn_segmentation, roi_segmentation` vs `roi` and `rpn`. For the validation split in `test_split_segmentation.txt` I get the following results for the two lightweight and two best full models (ResNet50+FPN backbone): 
