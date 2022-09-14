@@ -1,4 +1,6 @@
-## Update from 21/11/21: to appear in Applied Intelligence
+### Update from 14/09/22: Published in Applied Intelligence, January 2022, Volume 52, pages 9664–9675
+
+### Update from 21/11/21: to appear in Applied Intelligence
 
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
@@ -19,6 +21,15 @@ Papers on medrXiv:
 Bibtex citation ref: 
 
 ```
+
+@article {Ter-Sarkisov2020.10.11.20211052,
+	author = {Ter-Sarkisov, Aram},
+	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
+	year = {2020},
+	doi = {10.1101/2020.10.11.20211052},
+	publisher = {Cold Spring Harbor Laboratory Press},
+	journal = {medRxiv}
+	
 @article {Ter-Sarkisov2020.10.30.20223586,
 	author = {Ter-Sarkisov, Aram},
 	title = {Lightweight Model For The Prediction of COVID-19 Through The Detection And Segmentation
@@ -36,17 +47,9 @@ Bibtex citation ref:
 	doi = {10.1101/2020.10.23.20218461},
 	publisher = {Cold Spring Harbor Laboratory Press},
 	journal = {medRxiv}
-}
-
-@article {Ter-Sarkisov2020.10.11.20211052,
-	author = {Ter-Sarkisov, Aram},
-	title = {COVID-CT-Mask-Net: Prediction of COVID-19 from CT Scans Using Regional Features},
-	year = {2020},
-	doi = {10.1101/2020.10.11.20211052},
-	publisher = {Cold Spring Harbor Laboratory Press},
-	journal = {medRxiv}
-}
+}}
 ```
+
 ## Update 01/11/20
 I re-implemented torchvision's segmentation interface locally, in the end it was easier to keep two different files for RPN and RoI for segmentation and classification tasks: `rpn_segmentation, roi_segmentation` vs `roi` and `rpn`. For the validation split in `test_split_segmentation.txt` I get the following results for the two lightweight and two best full models (ResNet50+FPN backbone): 
 
