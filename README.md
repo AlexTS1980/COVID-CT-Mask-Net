@@ -1,6 +1,10 @@
-### Update from 14/09/22: Published in Applied Intelligence, January 2022, Volume 52, pages 9664–9675
+###########################################################################################################
+### We are looking for a new PhD student, to work on COVID-19 segmentation in CTs and CXRs! 
+### For the details see https://cit-ai.net/PhD-Scholarships.html#6 or email me alex.ter-sarkisov@city.ac.uk
+###########################################################################################################
+## Update from 14/09/22: Published in Applied Intelligence, January 2022, Volume 52, pages 9664–9675
 
-### Update from 21/11/21: to appear in Applied Intelligence
+## Update from 21/11/21: to appear in Applied Intelligence
 
 # COVID-CT-Mask-Net: Prediction of COVID-19 From CT Scans Using Regional Features
 
